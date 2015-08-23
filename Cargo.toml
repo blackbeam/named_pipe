@@ -1,0 +1,9 @@
+[package]
+name = "named_pipe"
+version = "0.1.0"
+authors = ["blackbeam <aikorsky@gmail.com>"]
+crate-type = ["lib"]
+
+[dependencies]
+winapi = "~0.2.2"
+kernel32-sys = "~0.1.4"
