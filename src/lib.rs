@@ -25,6 +25,7 @@ use std::ptr;
 use std::sync::Arc;
 use std::marker::PhantomData;
 use std::ffi::{OsStr, OsString};
+use std::os::windows::io::RawHandle;
 use std::os::windows::ffi::OsStrExt;
 
 use kernel32::*;
@@ -32,7 +33,7 @@ use kernel32::*;
 use winapi::*;
 
 struct Handle {
-    value: HANDLE,
+    value: RawHandle,
 }
 
 impl Drop for Handle {
@@ -496,14 +497,14 @@ impl io::Write for PipeClient {
 }
 
 pub struct PipeIoObj<'a> {
-    handle: HANDLE,
+    handle: RawHandle,
     ovl: &'a mut Overlapped,
 }
 
 #[allow(dead_code)]
 pub struct PipeIoHandles<'a> {
-    pipe_handle: HANDLE,
-    event_handle: HANDLE,
+    pipe_handle: RawHandle,
+    event_handle: RawHandle,
     _phantom: PhantomData<&'a ()>
 }
 
