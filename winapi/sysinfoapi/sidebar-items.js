@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["COMPUTER_NAME_FORMAT",""]],"struct":[["MEMORYSTATUSEX",""],["SYSTEM_INFO",""]],"type":[["CONDITION_VARIABLE",""],["INIT_ONCE",""],["LPINIT_ONCE",""],["LPMEMORYSTATUSEX",""],["LPSYSTEM_INFO",""],["PCONDITION_VARIABLE",""],["PINIT_ONCE",""]]});

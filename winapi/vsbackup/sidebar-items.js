@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["IVssBackupComponents",""],["IVssBackupComponentsVtbl",""],["IVssExamineWriterMetadata",""],["IVssExamineWriterMetadataVtbl",""],["IVssWMComponent",""],["IVssWMComponentVtbl",""],["IVssWriterComponentsExt",""],["IVssWriterComponentsExtVtbl",""],["VSS_COMPONENTINFO",""]],"type":[["PVSSCOMPONENTINFO",""]]});

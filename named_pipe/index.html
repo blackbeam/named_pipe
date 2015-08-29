@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `named_pipe` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, named_pipe">
+
+    <title>named_pipe - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'></p><script>window.sidebarCurrent = {name: 'named_pipe', ty: 'mod', relpath: '../'};</script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>named_pipe</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-0' class='srclink' href='../src/named_pipe/lib.rs.html#1-1198' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Named-Pipe is a wrapper for overlapped (asyncronous) IO of Windows&#39;s named pipes.</p>
+
+<h1 id="description" class='section-header'><a
+                           href="#description">Description</a></h1>
+<p>You can use <code>wait</code> or <code>wait_all</code> to <em>select(2)</em>-like wait for multiple pending IO operations
+(which is read/write from/to <code>PipeServer</code>/<code>PipeClient</code> or waiting for new client).</p>
+
+<p>Or you can use <code>ConnectingServer::wait</code> or <code>io::Read</code> and <code>io::Write</code> implementaions for
+<code>PipeServer</code> and <code>PipeClient</code> for syncronous communication.</p>
+
+<p>For better understanding please refer to <a href="https://www.google.com/search?q=msdn+named+pipes&amp;ie=utf-8&amp;oe=utf-8">Named Pipes documentation on MSDN</a>.</p>
+
+<h1 id="usage" class='section-header'><a
+                           href="#usage">Usage</a></h1>
+<p>To create new pipe instance use <a href="struct.PipeOptions.html"><code>PipeOptions</code></a> structure.</p>
+
+<p>To connect to a pipe server use <a href="struct.PipeClient.html"><code>PipeClient</code></a> structure.</p>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ConnectingServer.html'
+                               title='named_pipe::ConnectingServer'>ConnectingServer</a></td>
+                        <td class='docblock short'>
+                             <p>Pipe instance waiting for new client. Can be used with <a href="fn.wait.html"><code>wait</code></a> and <a href="fn.wait_all.html"><code>wait_all</code></a> functions.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PipeClient.html'
+                               title='named_pipe::PipeClient'>PipeClient</a></td>
+                        <td class='docblock short'>
+                             <p>Pipe client connected to a server.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PipeIoHandles.html'
+                               title='named_pipe::PipeIoHandles'>PipeIoHandles</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PipeIoObj.html'
+                               title='named_pipe::PipeIoObj'>PipeIoObj</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PipeOptions.html'
+                               title='named_pipe::PipeOptions'>PipeOptions</a></td>
+                        <td class='docblock short'>
+                             <p>Options and flags which can be used to configure how a pipe is created.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PipeServer.html'
+                               title='named_pipe::PipeServer'>PipeServer</a></td>
+                        <td class='docblock short'>
+                             <p>Pipe server connected to a client.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ReadHandle.html'
+                               title='named_pipe::ReadHandle'>ReadHandle</a></td>
+                        <td class='docblock short'>
+                             <p>Pending read operation. Can be used with <a href="fn.wait.html"><code>wait</code></a> and <a href="fn.wait_all.html"><code>wait_all</code></a> functions.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.WriteHandle.html'
+                               title='named_pipe::WriteHandle'>WriteHandle</a></td>
+                        <td class='docblock short'>
+                             <p>Pending write operation. Can be used with <a href="fn.wait.html"><code>wait</code></a> and <a href="fn.wait_all.html"><code>wait_all</code></a> functions.</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.OpenMode.html'
+                               title='named_pipe::OpenMode'>OpenMode</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.PipeIo.html'
+                               title='named_pipe::PipeIo'>PipeIo</a></td>
+                        <td class='docblock short'>
+                             <p>This trait used for genericity.</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.wait.html'
+                               title='named_pipe::wait'>wait</a></td>
+                        <td class='docblock short'>
+                             <p>This function will wait for first finished io operation and return it&#39;s index in <code>list</code>.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.wait_all.html'
+                               title='named_pipe::wait_all'>wait_all</a></td>
+                        <td class='docblock short'>
+                             <p>This function will wait for all overlapped io operations to finish.</p>
+
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "named_pipe";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>

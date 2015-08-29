@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `PipeOptions` struct in crate `named_pipe`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, PipeOptions">
+
+    <title>named_pipe::PipeOptions - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='index.html'>named_pipe</a></p><script>window.sidebarCurrent = {name: 'PipeOptions', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>named_pipe</a>::<wbr><a class='struct' href=''>PipeOptions</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-235' class='srclink' href='../src/named_pipe/lib.rs.html#131-137' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct PipeOptions {
+    // some fields omitted
+}</pre><div class='docblock'><p>Options and flags which can be used to configure how a pipe is created.</p>
+
+<p>This builder exposes the ability to configure how a <code>ConnectingServer</code> is created.</p>
+
+<p>Builder defaults:</p>
+
+<ul>
+<li><strong>open_mode</strong> - <code>Duplex</code></li>
+<li><strong>in_buffer</strong> - 65536</li>
+<li><strong>out_buffer</strong> - 65536</li>
+<li><strong>first</strong> - true</li>
+</ul>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>&lt;T: <a class='trait' href='http://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html' title='core::convert::AsRef'>AsRef</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/ffi/os_str/struct.OsStr.html' title='std::ffi::os_str::OsStr'>OsStr</a>&gt;&gt;(name: T) -&gt; <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h4>
+<h4 id='method.first' class='method'><code>fn <a href='#method.first' class='fnname'>first</a>(&amp;mut self, val: <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>) -&gt; &amp;mut <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h4>
+<div class='docblock'><p>Is this instance (or instances) will be first for this pipe name? Defaults to <code>true</code>.</p>
+</div><h4 id='method.open_mode' class='method'><code>fn <a href='#method.open_mode' class='fnname'>open_mode</a>(&amp;mut self, val: <a class='enum' href='../named_pipe/enum.OpenMode.html' title='named_pipe::OpenMode'>OpenMode</a>) -&gt; &amp;mut <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h4>
+<div class='docblock'><p>Open mode for pipe instance. Defaults to <code>Duplex</code>.</p>
+</div><h4 id='method.in_buffer' class='method'><code>fn <a href='#method.in_buffer' class='fnname'>in_buffer</a>(&amp;mut self, val: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>) -&gt; &amp;mut <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h4>
+<div class='docblock'><p>Input buffer size for pipe instance. Defaults to 65536</p>
+</div><h4 id='method.out_buffer' class='method'><code>fn <a href='#method.out_buffer' class='fnname'>out_buffer</a>(&amp;mut self, val: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>) -&gt; &amp;mut <a class='struct' href='../named_pipe/struct.PipeOptions.html' title='named_pipe::PipeOptions'>PipeOptions</a></code></h4>
+<div class='docblock'><p>Output buffer size for pipe instance. Defaults to 65536.</p>
+</div><h4 id='method.single' class='method'><code>fn <a href='#method.single' class='fnname'>single</a>(&amp;self) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a class='struct' href='../named_pipe/struct.ConnectingServer.html' title='named_pipe::ConnectingServer'>ConnectingServer</a>&gt;</code></h4>
+<div class='docblock'><p>Creates single instance of pipe with this options.</p>
+</div><h4 id='method.multiple' class='method'><code>fn <a href='#method.multiple' class='fnname'>multiple</a>(&amp;self, num: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../named_pipe/struct.ConnectingServer.html' title='named_pipe::ConnectingServer'>ConnectingServer</a>&gt;&gt;</code></h4>
+<div class='docblock'><p>Creates multiple instances of pipe with this options.</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "named_pipe";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `ReadHandle` struct in crate `named_pipe`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ReadHandle">
+
+    <title>named_pipe::ReadHandle - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='index.html'>named_pipe</a></p><script>window.sidebarCurrent = {name: 'ReadHandle', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>named_pipe</a>::<wbr><a class='struct' href=''>ReadHandle</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-2149' class='srclink' href='../src/named_pipe/lib.rs.html#637-643' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct ReadHandle&lt;'a, T&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>Pending read operation. Can be used with <a href="fn.wait.html"><code>wait</code></a> and <a href="fn.wait_all.html"><code>wait_all</code></a> functions.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;'a, T: <a class='trait' href='../named_pipe/trait.PipeIo.html' title='named_pipe::PipeIo'>PipeIo</a>&gt; <a class='struct' href='../named_pipe/struct.ReadHandle.html' title='named_pipe::ReadHandle'>ReadHandle</a>&lt;'a, T&gt;</code></h3><div class='impl-items'><h4 id='method.wait' class='method'><code>fn <a href='#method.wait' class='fnname'>wait</a>(self) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(T, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>&gt;)</a>&gt;)</a>&gt;</code></h4>
+<div class='docblock'><p>Will wait infinitely for completion.</p>
+
+<p>Returns (<bytes_read>, <owned_data>). Owned data is <code>Some((T, Vec&lt;u8&gt;))</code> if <code>ReadHandle</code>
+was created as a result of <code>T::read_async_owned</code>.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl&lt;'a, T: <a class='trait' href='../named_pipe/trait.PipeIo.html' title='named_pipe::PipeIo'>PipeIo</a>&gt; <a class='trait' href='../named_pipe/trait.PipeIo.html' title='named_pipe::PipeIo'>PipeIo</a> for <a class='struct' href='../named_pipe/struct.ReadHandle.html' title='named_pipe::ReadHandle'>ReadHandle</a>&lt;'a, T&gt;</code></h3><div class='impl-items'><h4 id='method.io_obj' class='method'><code>fn <a href='../named_pipe/trait.PipeIo.html#method.io_obj' class='fnname'>io_obj</a>&lt;'b&gt;(&amp;'b mut self) -&gt; <a class='struct' href='../named_pipe/struct.PipeIoObj.html' title='named_pipe::PipeIoObj'>PipeIoObj</a>&lt;'b&gt;</code></h4>
+<h4 id='method.io_handles' class='method'><code>fn <a href='../named_pipe/trait.PipeIo.html#method.io_handles' class='fnname'>io_handles</a>&lt;'b&gt;(&amp;'b self) -&gt; <a class='struct' href='../named_pipe/struct.PipeIoHandles.html' title='named_pipe::PipeIoHandles'>PipeIoHandles</a>&lt;'b&gt;</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "named_pipe";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>
