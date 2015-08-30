@@ -1,6 +1,6 @@
 [package]
 name = "named_pipe"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Anatoly Ikorsky <aikorsky@gmail.com>"]
 license = "MIT"
 description = "Wrapper for overlapped (asyncronous) IO of Windows's named pipes"
