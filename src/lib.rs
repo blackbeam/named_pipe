@@ -20,6 +20,7 @@ extern crate winapi;
 extern crate kernel32;
 
 use std::io;
+use std::fmt;
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use kernel32::*;
 
 use winapi::*;
 
+#[derive(Debug)]
 struct Handle {
     value: RawHandle,
 }
@@ -45,6 +47,7 @@ impl Drop for Handle {
 unsafe impl Sync for Handle { }
 unsafe impl Send for Handle { }
 
+#[derive(Debug)]
 struct Event {
     handle: Handle,
 }
@@ -74,6 +77,7 @@ impl Event {
     }
 }
 
+#[derive(Debug)]
 struct Overlapped {
     ovl: OVERLAPPED,
     event: Event,
@@ -100,6 +104,7 @@ impl Overlapped {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum OpenMode {
     /// Read only pipe instance
     Read,
@@ -129,6 +134,7 @@ impl OpenMode {
 /// - **in_buffer** - 65536
 /// - **out_buffer** - 65536
 /// - **first** - true
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct PipeOptions {
     name: Arc<Vec<u16>>,
     open_mode: OpenMode,
@@ -228,6 +234,7 @@ impl PipeOptions {
 
 /// Pipe instance waiting for new client. Can be used with [`wait`](fn.wait.html) and [`wait_all`]
 /// (fn.wait_all.html) functions.
+#[derive(Debug)]
 pub struct ConnectingServer {
     handle: Handle,
     ovl: Overlapped,
@@ -261,6 +268,7 @@ impl ConnectingServer {
 }
 
 /// Pipe server connected to a client.
+#[derive(Debug)]
 pub struct PipeServer {
     handle: Option<Handle>,
     ovl: Option<Overlapped>,
@@ -349,6 +357,7 @@ impl Drop for PipeServer {
 }
 
 /// Pipe client connected to a server.
+#[derive(Debug)]
 pub struct PipeClient {
     handle: Handle,
     ovl: Overlapped,
@@ -496,12 +505,14 @@ impl io::Write for PipeClient {
     }
 }
 
+#[derive(Debug)]
 pub struct PipeIoObj<'a> {
     handle: RawHandle,
     ovl: &'a mut Overlapped,
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct PipeIoHandles<'a> {
     pipe_handle: RawHandle,
     event_handle: RawHandle,
@@ -643,6 +654,31 @@ pub struct ReadHandle<'a, T> {
     buffer: Option<Vec<u8>>,
 }
 
+impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.io_ref {
+            Some(ref io) => {
+                fmt.debug_struct("ReadHandle")
+                 .field("io", &self.io)
+                 .field("io_ref", &io.io_handles())
+                 .field("bytes_read", &self.bytes_read)
+                 .field("pending", &self.pending)
+                 .field("buffer", &self.buffer)
+                 .finish()
+            },
+            None => {
+                fmt.debug_struct("ReadHandle")
+                 .field("io", &self.io)
+                 .field("io_ref", &"None")
+                 .field("bytes_read", &self.bytes_read)
+                 .field("pending", &self.pending)
+                 .field("buffer", &self.buffer)
+                 .finish()
+            },
+        }
+    }
+}
+
 impl<'a, T: PipeIo> ReadHandle<'a, T> {
     /// Will wait infinitely for completion.
     ///
@@ -692,6 +728,33 @@ pub struct WriteHandle<'a, T> {
     bytes_written: u32,
     num_bytes: u32,
     pending: bool,
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.io_ref {
+            Some(ref io) => {
+                fmt.debug_struct("WriteHandle")
+                 .field("io", &self.io)
+                 .field("io_ref", &io.io_handles())
+                 .field("bytes_written", &self.bytes_written)
+                 .field("num_bytes", &self.num_bytes)
+                 .field("pending", &self.pending)
+                 .field("buffer", &self.buffer)
+                 .finish()
+            },
+            None => {
+                fmt.debug_struct("WriteHandle")
+                 .field("io", &self.io)
+                 .field("io_ref", &"None")
+                 .field("bytes_written", &self.bytes_written)
+                 .field("num_bytes", &self.num_bytes)
+                 .field("pending", &self.pending)
+                 .field("buffer", &self.buffer)
+                 .finish()
+            },
+        }
+    }
 }
 
 impl<'a, T: PipeIo> WriteHandle<'a, T> {
