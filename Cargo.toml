@@ -2,7 +2,7 @@
 name = "named_pipe"
 version = "0.1.1"
 authors = ["Anatoly Ikorsky <aikorsky@gmail.com>"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 description = "Wrapper for overlapped (asyncronous) IO of Windows's named pipes"
 repository = "https://github.com/blackbeam/named_pipe"
 documentation = "https://blackbeam.github.io/named_pipe/named_pipe/index.html"
