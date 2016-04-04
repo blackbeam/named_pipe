@@ -32,6 +32,7 @@ use std::fmt;
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::marker::PhantomData;
 use std::ffi::{OsStr, OsString};
 use std::os::windows::io::RawHandle;
@@ -271,6 +272,8 @@ impl ConnectingServer {
         Ok(Ok(PipeServer {
             handle: Some(handle),
             ovl: Some(ovl),
+            read_timeout: None,
+            write_timeout: None,
         }))
     }
 }
@@ -280,6 +283,8 @@ impl ConnectingServer {
 pub struct PipeServer {
     handle: Option<Handle>,
     ovl: Option<Overlapped>,
+    read_timeout: Option<u32>,
+    write_timeout: Option<u32>,
 }
 
 impl PipeServer {
@@ -327,6 +332,58 @@ impl PipeServer {
     pub fn write_async_owned(self, buf: Vec<u8>) -> io::Result<WriteHandle<'static, Self>> {
         init_write_owned(self, buf)
     }
+
+    /// Allows you to set read timeout in milliseconds.
+    ///
+    /// Note that zero value will return immediately and 0xFFFFFFFF will wait forever. Also note
+    /// that nanos will be ignored and also if number of milliseconds is greater than 0xFFFFFFFF
+    /// then it will write 0xFFFFFFFF as a timeout value.
+    ///
+    /// Defaults to None (infinite).
+    pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) {
+        self.read_timeout = read_timeout.map(|dur| {
+            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
+            if overflowed || val > 0xFFFFFFFF {
+                0xFFFFFFFF
+            } else {
+                val as u32
+            }
+        });
+    }
+
+    /// Allows you to set write timeout in milliseconds.
+    ///
+    /// Note that zero value will return immediately and 0xFFFFFFFF will wait forever.Also note
+    /// that nanos will be ignored and also if number of milliseconds is greater than 0xFFFFFFFF
+    /// then it will write 0xFFFFFFFF as a timeout value.
+    ///
+    /// Defaults to None (infinite).
+    pub fn set_write_timeout(&mut self, write_timeout: Option<Duration>) {
+        self.write_timeout = write_timeout.map(|dur| {
+            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
+            if overflowed || val > 0xFFFFFFFF {
+                0xFFFFFFFF
+            } else {
+                val as u32
+            }
+        });
+    }
+
+    pub fn get_read_timeout(&self) -> Option<Duration> {
+        self.read_timeout.clone().map(|millis| Duration::from_millis(millis as u64))
+    }
+
+    pub fn get_write_timeout(&self) -> Option<Duration> {
+        self.write_timeout.clone().map(|millis| Duration::from_millis(millis as u64))
+    }
+
+    fn get_read_timeout_ms(&self) -> Option<u32> {
+        self.read_timeout.clone()
+    }
+
+    fn get_write_timeout_ms(&self) -> Option<u32> {
+        self.write_timeout.clone()
+    }
 }
 
 impl io::Read for PipeServer {
@@ -369,6 +426,8 @@ impl Drop for PipeServer {
 pub struct PipeClient {
     handle: Handle,
     ovl: Overlapped,
+    read_timeout: Option<u32>,
+    write_timeout: Option<u32>,
 }
 
 impl PipeClient {
@@ -447,7 +506,12 @@ impl PipeClient {
                     };
 
                     if result != 0 {
-                        return Ok(PipeClient { handle: handle, ovl: try!(Overlapped::new()) });
+                        return Ok(PipeClient {
+                            handle: handle,
+                            ovl: try!(Overlapped::new()),
+                            read_timeout: None,
+                            write_timeout: None,
+                        });
                     } else {
                         return Err(io::Error::last_os_error());
                     }
@@ -490,6 +554,58 @@ impl PipeClient {
     pub fn write_async_owned(self, buf: Vec<u8>) -> io::Result<WriteHandle<'static, Self>> {
         init_write_owned(self, buf)
     }
+
+    /// Allows you to set read timeout in milliseconds.
+    ///
+    /// Note that zero value will return immediately and 0xFFFFFFFF will wait forever. Also note
+    /// that nanos will be ignored and also if number of milliseconds is greater than 0xFFFFFFFF
+    /// then it will write 0xFFFFFFFF as a timeout value.
+    ///
+    /// Defaults to None (infinite).
+    pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) {
+        self.read_timeout = read_timeout.map(|dur| {
+            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
+            if overflowed || val > 0xFFFFFFFF {
+                0xFFFFFFFF
+            } else {
+                val as u32
+            }
+        });
+    }
+
+    /// Allows you to set write timeout in milliseconds.
+    ///
+    /// Note that zero value will return immediately and 0xFFFFFFFF will wait forever.Also note
+    /// that nanos will be ignored and also if number of milliseconds is greater than 0xFFFFFFFF
+    /// then it will write 0xFFFFFFFF as a timeout value.
+    ///
+    /// Defaults to None (infinite).
+    pub fn set_write_timeout(&mut self, write_timeout: Option<Duration>) {
+        self.write_timeout = write_timeout.map(|dur| {
+            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
+            if overflowed || val > 0xFFFFFFFF {
+                0xFFFFFFFF
+            } else {
+                val as u32
+            }
+        });
+    }
+
+    pub fn get_read_timeout(&self) -> Option<Duration> {
+        self.read_timeout.clone().map(|millis| Duration::from_millis(millis as u64))
+    }
+
+    pub fn get_write_timeout(&self) -> Option<Duration> {
+        self.write_timeout.clone().map(|millis| Duration::from_millis(millis as u64))
+    }
+
+    fn get_read_timeout_ms(&self) -> Option<u32> {
+        self.read_timeout.clone()
+    }
+
+    fn get_write_timeout_ms(&self) -> Option<u32> {
+        self.write_timeout.clone()
+    }
 }
 
 impl io::Read for PipeClient {
@@ -531,6 +647,8 @@ pub struct PipeIoHandles<'a> {
 pub trait PipeIo {
     fn io_obj<'a>(&'a mut self) -> PipeIoObj<'a>;
     fn io_handles<'a>(&'a self) -> PipeIoHandles<'a>;
+    fn get_read_timeout(&self) -> Option<u32>;
+    fn get_write_timeout(&self) -> Option<u32>;
 }
 
 impl PipeIo for PipeServer {
@@ -564,6 +682,14 @@ impl PipeIo for PipeServer {
             _phantom: PhantomData,
         }
     }
+
+    fn get_read_timeout(&self) -> Option<u32> {
+        Self::get_read_timeout_ms(self)
+    }
+
+    fn get_write_timeout(&self) -> Option<u32> {
+        Self::get_write_timeout_ms(self)
+    }
 }
 
 impl PipeIo for PipeClient {
@@ -580,6 +706,14 @@ impl PipeIo for PipeClient {
             event_handle: self.ovl.ovl.hEvent,
             _phantom: PhantomData,
         }
+    }
+
+    fn get_read_timeout(&self) -> Option<u32> {
+        Self::get_read_timeout_ms(self)
+    }
+
+    fn get_write_timeout(&self) -> Option<u32> {
+        Self::get_write_timeout_ms(self)
     }
 }
 
@@ -603,6 +737,30 @@ impl<'a, T: PipeIo> PipeIo for ReadHandle<'a, T> {
         }
         match self.io_ref {
             Some(ref io) => return io.io_handles(),
+            _ => (),
+        }
+        unreachable!();
+    }
+
+    fn get_read_timeout(&self) -> Option<u32> {
+        match self.io {
+            Some(ref io) => return io.get_read_timeout(),
+            _ => ()
+        }
+        match self.io_ref {
+            Some(ref io) => return io.get_read_timeout(),
+            _ => (),
+        }
+        unreachable!();
+    }
+
+    fn get_write_timeout(&self) -> Option<u32> {
+        match self.io {
+            Some(ref io) => return io.get_write_timeout(),
+            _ => ()
+        }
+        match self.io_ref {
+            Some(ref io) => return io.get_write_timeout(),
             _ => (),
         }
         unreachable!();
@@ -633,6 +791,30 @@ impl<'a, T: PipeIo> PipeIo for WriteHandle<'a, T> {
         }
         unreachable!();
     }
+
+    fn get_read_timeout(&self) -> Option<u32> {
+        match self.io {
+            Some(ref io) => return io.get_read_timeout(),
+            _ => ()
+        }
+        match self.io_ref {
+            Some(ref io) => return io.get_read_timeout(),
+            _ => (),
+        }
+        unreachable!();
+    }
+
+    fn get_write_timeout(&self) -> Option<u32> {
+        match self.io {
+            Some(ref io) => return io.get_write_timeout(),
+            _ => ()
+        }
+        match self.io_ref {
+            Some(ref io) => return io.get_write_timeout(),
+            _ => (),
+        }
+        unreachable!();
+    }
 }
 
 impl PipeIo for ConnectingServer {
@@ -649,6 +831,14 @@ impl PipeIo for ConnectingServer {
             event_handle: self.ovl.ovl.hEvent,
             _phantom: PhantomData,
         }
+    }
+
+    fn get_read_timeout(&self) -> Option<u32> {
+        None
+    }
+
+    fn get_write_timeout(&self) -> Option<u32> {
+        None
     }
 }
 
@@ -688,13 +878,14 @@ impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
 }
 
 impl<'a, T: PipeIo> ReadHandle<'a, T> {
-    /// Will wait infinitely for completion.
+    /// Will wait for completion infinitely, or until read_timeout reached if read_timeout has been set.
     ///
     /// Returns (<bytes_read>, <owned_data>). Owned data is `Some((T, Vec<u8>))` if `ReadHandle`
     /// was created as a result of `T::read_async_owned`.
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         if self.pending {
-            match try!(wait_for_single_obj(&mut self, INFINITE)) {
+            let timeout = self.get_read_timeout().unwrap_or(INFINITE);
+            match try!(wait_for_single_obj(&mut self, timeout)) {
                 Some(_) => match try!(get_ovl_result(&mut self)) {
                     0 => Err(io::Error::last_os_error()),
                     x => {
@@ -710,7 +901,7 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
                         }
                     },
                 },
-                None => unreachable!(),
+                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe")),
             }
         } else {
             let ReadHandle { io, io_ref: _, bytes_read, pending: _, buffer } = self;
@@ -766,13 +957,14 @@ impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
 }
 
 impl<'a, T: PipeIo> WriteHandle<'a, T> {
-    /// Will wait infinitely for completion.
+    /// Will wait for completion infinitely, or until write_timeout reached if write_timeout has been set.
     ///
     /// Returns (<bytes_read>, <owned_data>). Owned data is `Some((T, Vec<u8>))` if `WriteHandle`
     /// was created as a result of `T::write_async_owned`.
     fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         if self.pending {
-            match try!(wait_for_single_obj(&mut self, INFINITE)) {
+            let timeout = self.get_write_timeout().unwrap_or(INFINITE);
+            match try!(wait_for_single_obj(&mut self, timeout)) {
                 Some(_) => match try!(get_ovl_result(&mut self)) {
                     x if x as u32 == self.num_bytes => {
                         let WriteHandle {
@@ -794,7 +986,7 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
                     },
                     _ => Err(io::Error::last_os_error()),
                 },
-                None => unreachable!(),
+                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while writing into pipe")),
             }
         } else {
             let WriteHandle {
@@ -1067,21 +1259,6 @@ pub fn wait<T: PipeIo>(list: &[T]) -> io::Result<usize> {
     }
 }
 
-/// This function will wait for all overlapped io operations to finish.
-///
-/// # Panics
-///
-/// This function will panic if `list.len() == 0` or `list.len() > MAXIMUM_WAIT_OBJECTS`
-pub fn wait_all<T: PipeIo>(list: &[T]) -> io::Result<()> {
-    assert!(list.len() > 0);
-
-    if try!(wait_for_multiple_obj(list, true, INFINITE)).is_some() {
-        Ok(())
-    } else {
-        unreachable!()
-    }
-}
-
 #[test]
 fn test_io_single_thread() {
     let connecting_server = PipeOptions::new(r"\\.\pipe\test_io_single_thread").single().unwrap();
@@ -1130,6 +1307,7 @@ fn test_io_single_thread() {
 #[test]
 fn test_io_multiple_threads() {
     use std::thread;
+    use std::time::Duration;
     use std::io::{Read, Write};
 
     let connecting_server = PipeOptions::new(r"\\.\pipe\test_io_multiple_threads").single().unwrap();
@@ -1141,7 +1319,7 @@ fn test_io_multiple_threads() {
         buf
     });
     let t2 = thread::spawn(move || {
-        thread::sleep_ms(50);
+        thread::sleep(Duration::from_millis(50));
         let mut buf = [0; 5];
         let mut client = PipeClient::connect(r"\\.\pipe\test_io_multiple_threads").unwrap();
         client.read(&mut buf).unwrap();
@@ -1195,76 +1373,37 @@ fn test_wait() {
 }
 
 #[test]
-fn test_wait_all() {
+fn test_timeout() {
     use std::thread;
+    use std::time::Duration;
+    use std::io::{self, Read, Write};
 
-    let connecting_servers = PipeOptions::new(r"\\.\pipe\test_wait_all").multiple(16).unwrap();
+    let server = PipeOptions::new(r"\\.\pipe\test_timeout").single().unwrap();
     let t1 = thread::spawn(move || {
-        let mut clients = Vec::with_capacity(16);
-        for _ in 0..16 {
-            clients.push(PipeClient::connect(r"\\.\pipe\test_wait_all").unwrap());
-        }
-        let read_handles = clients.into_iter()
-                                  .map(|c| c.read_async_owned(vec![0; 4]).unwrap())
-                                  .collect::<Vec<ReadHandle<'static, PipeClient>>>();
-        wait_all(read_handles.as_ref()).unwrap();
-        let (results, clients) = read_handles.into_iter().fold((vec![], vec![]), |mut vecs, x| {
-            if let (count, Some((client, buf))) = x.wait().unwrap() {
-                assert_eq!(count, 4);
-                vecs.0.push(buf);
-                vecs.1.push(client);
-                vecs
-            } else {
-                unreachable!();
-            }
-        });
-        for (i, result) in results.into_iter().enumerate() {
-            assert_eq!(vec![i as u8, i as u8, i as u8, i as u8], result);
-        }
-
-        let write_handles = clients.into_iter()
-                                   .map(|c| c.write_async_owned(b"done".to_vec()).unwrap())
-                                   .collect::<Vec<WriteHandle<'static, PipeClient>>>();
-        wait_all(write_handles.as_ref()).unwrap();
-        let it = write_handles.into_iter().map(|x| {
-            if let (count, Some(_)) = x.wait().unwrap() {
-                assert_eq!(count, 4);
-            } else {
-                unreachable!();
-            }
-        });
-        for _ in it {}
+        let mut buf = [0; 10];
+        let mut client = PipeClient::connect(r"\\.\pipe\test_timeout").unwrap();
+        client.set_read_timeout(Some(Duration::from_millis(10)));
+        let err = client.read(&mut buf).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        client.set_read_timeout(None);
+        client.read(&mut buf).unwrap();
+        thread::sleep(Duration::from_millis(200));
+        client.write(b"done").unwrap();
+        client.flush().unwrap();
+        assert_eq!(b"0123456789", &buf[..]);
+        thread::park();
     });
 
-    wait_all(connecting_servers.as_ref()).unwrap();
-    let servers = connecting_servers.into_iter().map(|cs| cs.wait().unwrap());
+    let mut buf = [0; 4];
+    thread::sleep(Duration::from_millis(200));
+    let mut server = server.wait().unwrap();
+    server.write(b"0123456789").unwrap();
+    server.set_read_timeout(Some(Duration::from_millis(10)));
+    let err = server.read(&mut buf).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    server.set_read_timeout(None);
+    server.read(&mut buf).unwrap();
 
-    let write_handles = servers.into_iter().enumerate()
-                               .map(|(i, s)| s.write_async_owned(vec![i as u8; 4]).unwrap())
-                               .collect::<Vec<WriteHandle<'static, PipeServer>>>();
-    wait_all(write_handles.as_ref()).unwrap();
-    let servers = write_handles.into_iter().fold(Vec::new(), |mut ss, x| {
-        if let (count, Some((s, _))) = x.wait().unwrap() {
-            assert_eq!(count, 4);
-            ss.push(s);
-            ss
-        } else {
-            unreachable!();
-        }
-    });
-
-    let read_handles = servers.into_iter()
-                              .map(|s| s.read_async_owned(vec![0; 4]).unwrap())
-                              .collect::<Vec<ReadHandle<'static, PipeServer>>>();
-    wait_all(read_handles.as_ref()).unwrap();
-    let _ = read_handles.into_iter().map(|x| {
-        if let (count, Some((_, buf))) = x.wait().unwrap() {
-            assert_eq!(count, 4);
-            assert_eq!(b"done".to_vec(), buf);
-        } else {
-            unreachable!()
-        }
-    });
-
+    t1.thread().unpark();
     t1.join().unwrap();
 }
