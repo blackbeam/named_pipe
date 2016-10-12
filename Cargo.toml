@@ -11,8 +11,8 @@ keywords = ["windows", "named", "pipes"]
 crate-type = ["lib"]
 
 [dependencies]
-winapi = "~0.2.2"
-kernel32-sys = "~0.1.4"
+winapi = "~0.2.8"
+kernel32-sys = "~0.2.2"
 
 [profile.test]
 opt-level = 0
