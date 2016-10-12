@@ -431,55 +431,41 @@ pub struct PipeClient {
 }
 
 impl PipeClient {
-    fn create_file(name: &Vec<u16>) -> io::Result<Handle> {
-        let mut handle = unsafe {
-            CreateFileW(name.as_ptr(),
-                        GENERIC_READ | GENERIC_WRITE,
-                        0,
-                        ptr::null_mut(),
-                        OPEN_EXISTING,
-                        FILE_FLAG_OVERLAPPED,
-                        ptr::null_mut())
-        };
-
-        if handle != INVALID_HANDLE_VALUE {
-            return Ok(Handle { value: handle });
-        }
-
-        match unsafe { GetLastError() } {
-            ERROR_ACCESS_DENIED => handle = unsafe {
+    fn create_file(name: &Vec<u16>, mode: DWORD) -> io::Result<Handle> {
+        loop {
+            let handle = unsafe {
                 CreateFileW(name.as_ptr(),
-                            GENERIC_READ | FILE_WRITE_ATTRIBUTES,
+                            mode,
                             0,
                             ptr::null_mut(),
                             OPEN_EXISTING,
                             FILE_FLAG_OVERLAPPED,
                             ptr::null_mut())
-            },
-            err => return Err(io::Error::from_raw_os_error(err as i32)),
-        }
+            };
 
-        if handle != INVALID_HANDLE_VALUE {
-            return Ok(Handle { value: handle });
-        }
+            if handle != INVALID_HANDLE_VALUE {
+                return Ok(Handle { value: handle });
+            }
 
-        match unsafe { GetLastError() } {
-            ERROR_ACCESS_DENIED => handle = unsafe {
-                CreateFileW(name.as_ptr(),
-                            GENERIC_WRITE | FILE_READ_ATTRIBUTES,
-                            0,
-                            ptr::null_mut(),
-                            OPEN_EXISTING,
-                            FILE_FLAG_OVERLAPPED,
-                            ptr::null_mut())
-            },
-            err => return Err(io::Error::from_raw_os_error(err as i32)),
-        }
-
-        if handle != INVALID_HANDLE_VALUE {
-            Ok(Handle { value: handle })
-        } else {
-            Err(io::Error::last_os_error())
+            match unsafe { GetLastError() } {
+                ERROR_PIPE_BUSY => {
+                    unsafe { WaitNamedPipeW(name.as_ptr(), 0) };
+                },
+                ERROR_ACCESS_DENIED => match mode {
+                    mode if mode == (GENERIC_READ | GENERIC_WRITE) => {
+                        return PipeClient::create_file(name, GENERIC_READ | FILE_WRITE_ATTRIBUTES);
+                    },
+                    mode if mode == (GENERIC_READ | FILE_WRITE_ATTRIBUTES) => {
+                        return PipeClient::create_file(name, GENERIC_WRITE | FILE_READ_ATTRIBUTES);
+                    },
+                    _ => {
+                        return Err(io::Error::last_os_error());
+                    }
+                },
+                _ => {
+                    return Err(io::Error::last_os_error());
+                },
+            }
         }
     }
 
@@ -495,7 +481,7 @@ impl PipeClient {
         let full_name = full_name.encode_wide().collect::<Vec<u16>>();
         let mut waited = false;
         loop {
-            match PipeClient::create_file(&full_name) {
+            match PipeClient::create_file(&full_name, GENERIC_READ | GENERIC_WRITE) {
                 Ok(handle) => {
                     let result = unsafe {
                         let mut mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;
@@ -607,6 +593,8 @@ impl PipeClient {
         self.write_timeout.clone()
     }
 }
+
+unsafe impl Send for PipeClient {}
 
 impl io::Read for PipeClient {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
