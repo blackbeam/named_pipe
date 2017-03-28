@@ -301,7 +301,7 @@ pub struct PipeServer {
 impl PipeServer {
     /// This function will flush buffers and disconnect server from client. Then will start waiting
     /// for a new client.
-    pub fn unwrap(mut self) -> io::Result<ConnectingServer> {
+    pub fn disconnect(mut self) -> io::Result<ConnectingServer> {
         let handle = self.handle.take().unwrap();
         let mut ovl = self.ovl.take().unwrap();
         let mut result = unsafe { FlushFileBuffers(handle.value) };
@@ -1281,7 +1281,7 @@ fn test_io_single_thread() {
         w_handle.wait().unwrap();
     }
 
-    let connecting_server = server.unwrap().unwrap();
+    let connecting_server = server.disconnect().unwrap();
     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
     let mut server = connecting_server.wait().unwrap();
     {
@@ -1333,11 +1333,11 @@ fn test_io_multiple_threads() {
     assert_eq!(b"done", &buf[..]);
 
     let mut buf = [0; 4];
-    let mut server = server.unwrap().unwrap().wait().unwrap();
+    let mut server = server.disconnect().unwrap().wait().unwrap();
     server.write(b"56789").unwrap();
     server.read(&mut buf).unwrap();
     assert_eq!(b"done", &buf[..]);
-    server.unwrap().unwrap();
+    server.disconnect().unwrap();
 
     assert_eq!(b"01234", &t1.join().unwrap()[..]);
     assert_eq!(b"56789", &t2.join().unwrap()[..]);
