@@ -1,4 +1,7 @@
 # named_pipe
+
+[![Build status](https://ci.appveyor.com/api/projects/status/github/blackbeam/named-pipe?svg=true&branch=master)](https://ci.appveyor.com/project/blackbeam/named-pipe/branch/master)
+
 Named-Pipe is a rust wrapper for overlapped (asyncronous) IO of Windows's named pipes.
 
 ## Install
