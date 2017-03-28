@@ -76,6 +76,15 @@ impl Event {
         }
     }
 
+    fn reset(&self) -> io::Result<()> {
+        let result = unsafe { ResetEvent(self.handle.value) };
+        if result != 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
     fn set(&self) -> io::Result<()> {
         let result = unsafe { SetEvent(self.handle.value) };
         if result != 0 {
@@ -88,14 +97,14 @@ impl Event {
 
 #[derive(Debug)]
 struct Overlapped {
-    ovl: OVERLAPPED,
+    ovl: Box<OVERLAPPED>,
     event: Event,
 }
 
 impl Overlapped {
     fn new() -> io::Result<Overlapped> {
         let event = try!(Event::new());
-        let mut ovl: OVERLAPPED = unsafe { mem::zeroed() };
+        let mut ovl: Box<OVERLAPPED> = Box::new(unsafe { mem::zeroed() });
         ovl.hEvent = event.handle.value;
         Ok(Overlapped {
             ovl: ovl,
@@ -103,9 +112,11 @@ impl Overlapped {
         })
     }
 
-    fn clear(&mut self) {
-        self.ovl = unsafe { mem::zeroed() };
+    fn clear(&mut self) -> io::Result<()> {
+        self.event.reset()?;
+        self.ovl = Box::new(unsafe { mem::zeroed() });
         self.ovl.hEvent = self.event.handle.value;
+        Ok(())
     }
 
     fn get_mut(&mut self) -> &mut OVERLAPPED {
@@ -268,7 +279,7 @@ impl ConnectingServer {
             }
         }
         let ConnectingServer { handle, mut ovl, ..} = self;
-        ovl.clear();
+        ovl.clear()?;
         Ok(Ok(PipeServer {
             handle: Some(handle),
             ovl: Some(ovl),
@@ -298,7 +309,7 @@ impl PipeServer {
         if result != 0 {
             result = unsafe { DisconnectNamedPipe(handle.value) };
             if result != 0 {
-                ovl.clear();
+                ovl.clear()?;
                 let pending = try!(connect_named_pipe(&handle, &mut ovl));
                 Ok(ConnectingServer {
                     handle: handle,
@@ -1024,7 +1035,7 @@ where T: PipeIo {
                  buf.as_mut_ptr() as *mut c_void,
                  buf.len() as u32,
                  &mut bytes_read,
-                 &mut io_obj.ovl.ovl)
+                 &mut *io_obj.ovl.ovl)
     };
 
     if result != 0 && bytes_read != 0 {
@@ -1059,7 +1070,7 @@ fn init_read_owned<T: PipeIo>(mut this: T, mut buf: Vec<u8>) -> io::Result<ReadH
                  buf.as_mut_ptr() as *mut c_void,
                  buf.len() as u32,
                  &mut bytes_read,
-                 &mut io_obj.ovl.ovl)
+                 &mut *io_obj.ovl.ovl)
     };
 
     if result != 0 && bytes_read != 0 {
@@ -1096,7 +1107,7 @@ where T: PipeIo {
                   buf.as_ptr() as *mut c_void,
                   buf.len() as u32,
                   &mut bytes_written,
-                  &mut io_obj.ovl.ovl)
+                  &mut *io_obj.ovl.ovl)
     };
 
     if result != 0 && bytes_written == buf.len() as u32 {
@@ -1135,7 +1146,7 @@ where T: PipeIo {
                   buf.as_ptr() as *mut c_void,
                   buf.len() as u32,
                   &mut bytes_written,
-                  &mut io_obj.ovl.ovl)
+                  &mut *io_obj.ovl.ovl)
     };
 
     if result != 0 && bytes_written == buf.len() as u32 {
@@ -1169,7 +1180,7 @@ fn get_ovl_result<T: PipeIo>(this: &mut T) -> io::Result<usize> {
     let result = unsafe {
         let io_obj = this.io_obj();
         GetOverlappedResult(io_obj.handle,
-                            &mut io_obj.ovl.ovl,
+                            &mut *io_obj.ovl.ovl,
                             &mut count,
                             TRUE)
     };
