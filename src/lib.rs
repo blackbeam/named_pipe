@@ -274,7 +274,10 @@ impl ConnectingServer {
     pub fn wait_ms(mut self, timeout: u32) -> io::Result<Result<PipeServer, ConnectingServer>> {
         if self.pending {
             match try!(wait_for_single_obj(&mut self, timeout)) {
-                Some(_) => { try!(get_ovl_result(&mut self)); },
+                Some(_) => {
+                    let mut dummy = 0;
+                    try!(get_ovl_result(&mut self, &mut dummy));
+                },
                 None => return Ok(Err(self)),
             }
         }
@@ -399,7 +402,15 @@ impl PipeServer {
 
 impl io::Read for PipeServer {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.read_async(buf).and_then(|read_handle| read_handle.wait()).map(|x| x.0)
+        let result = self.read_async(buf).and_then(|read_handle| read_handle.wait()).map(|x| x.0);
+        match result {
+            Ok(x) => Ok(x),
+            Err(err) => if err.raw_os_error() == Some(ERROR_BROKEN_PIPE as i32) {
+                Ok(0)
+            } else {
+                Err(err)
+            }
+        }
     }
 }
 
@@ -877,32 +888,33 @@ impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
 }
 
 impl<'a, T: PipeIo> ReadHandle<'a, T> {
+    fn wait_impl(&mut self) -> io::Result<()> {
+        if self.pending {
+            let timeout = self.get_read_timeout().unwrap_or(INFINITE);
+            match try!(wait_for_single_obj(self, timeout)) {
+                Some(_) => {
+                    let mut count = 0;
+                    match try!(get_ovl_result(self, &mut count)) {
+                        0 => Err(io::Error::last_os_error()),
+                        _ => {
+                            self.bytes_read = count;
+                            Ok(())
+                        }
+                    }
+                },
+                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe")),
+            }
+        } else {
+            Ok(())
+        }
+    }
     /// Will wait for completion infinitely, or until read_timeout reached if read_timeout has been set.
     ///
     /// Returns (<bytes_read>, <owned_data>). Owned data is `Some((T, Vec<u8>))` if `ReadHandle`
     /// was created as a result of `T::read_async_owned`.
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
-        if self.pending {
-            let timeout = self.get_read_timeout().unwrap_or(INFINITE);
-            match try!(wait_for_single_obj(&mut self, timeout)) {
-                Some(_) => match try!(get_ovl_result(&mut self)) {
-                    0 => Err(io::Error::last_os_error()),
-                    x => {
-                        let ReadHandle { io, io_ref: _, bytes_read: _, pending: _, buffer } = self;
-                        if let Some(buf) = buffer {
-                            if let Some(io) = io {
-                                Ok((x, Some((io, buf))))
-                            } else {
-                                unreachable!()
-                            }
-                        } else {
-                            Ok((x, None))
-                        }
-                    },
-                },
-                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe")),
-            }
-        } else {
+        let result = self.wait_impl();
+        let output = {
             let ReadHandle { io, io_ref: _, bytes_read, pending: _, buffer } = self;
             if let Some(buf) = buffer {
                 if let Some(io) = io {
@@ -912,6 +924,14 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
                 }
             } else {
                 Ok((bytes_read as usize, None))
+            }
+        };
+        match result {
+            Ok(_) => output,
+            Err(err) => if err.raw_os_error() == Some(ERROR_BROKEN_PIPE as i32) {
+                output
+            } else {
+                Err(err)
             }
         }
     }
@@ -956,54 +976,45 @@ impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
 }
 
 impl<'a, T: PipeIo> WriteHandle<'a, T> {
+    fn wait_impl(&mut self) -> io::Result<()> {
+        if self.pending {
+            let timeout = self.get_write_timeout().unwrap_or(INFINITE);
+            match try!(wait_for_single_obj(self, timeout)) {
+                Some(_) => {
+                    let mut bytes_written = 0;
+                    match try!(get_ovl_result(self, &mut bytes_written)) {
+                        x if x as u32 == self.num_bytes => {
+                            self.bytes_written = bytes_written;
+                            Ok(())
+                        },
+                        _ => Err(io::Error::last_os_error()),
+                    }
+                },
+                None => {
+                    Err(io::Error::new(io::ErrorKind::TimedOut,
+                                       "timed out while writing into pipe"))
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+
     /// Will wait for completion infinitely, or until write_timeout reached if write_timeout has been set.
     ///
     /// Returns (<bytes_read>, <owned_data>). Owned data is `Some((T, Vec<u8>))` if `WriteHandle`
     /// was created as a result of `T::write_async_owned`.
-    fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
-        if self.pending {
-            let timeout = self.get_write_timeout().unwrap_or(INFINITE);
-            match try!(wait_for_single_obj(&mut self, timeout)) {
-                Some(_) => match try!(get_ovl_result(&mut self)) {
-                    x if x as u32 == self.num_bytes => {
-                        let WriteHandle {
-                            io,
-                            io_ref: _,
-                            bytes_written: _,
-                            num_bytes: _,
-                            pending: _,
-                            buffer } = self;
-                        if let Some(buf) = buffer {
-                            if let Some(io) = io {
-                                Ok((x, Some((io, buf))))
-                            } else {
-                                unreachable!()
-                            }
-                        } else {
-                            Ok((x, None))
-                        }
-                    },
-                    _ => Err(io::Error::last_os_error()),
-                },
-                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while writing into pipe")),
+    pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
+        try!(self.wait_impl());
+        let WriteHandle {io, bytes_written, buffer, ..} = self;
+        if let Some(buf) = buffer {
+            if let Some(io) = io {
+                Ok((bytes_written as usize, Some((io, buf))))
+            } else {
+                unreachable!()
             }
         } else {
-            let WriteHandle {
-                io,
-                io_ref: _,
-                bytes_written,
-                num_bytes: _,
-                pending: _,
-                buffer } = self;
-            if let Some(buf) = buffer {
-                if let Some(io) = io {
-                    Ok((bytes_written as usize, Some((io, buf))))
-                } else {
-                    unreachable!()
-                }
-            } else {
-                Ok((bytes_written as usize, None))
-            }
+            Ok((bytes_written as usize, None))
         }
     }
 }
@@ -1175,17 +1186,16 @@ where T: PipeIo {
     }
 }
 
-fn get_ovl_result<T: PipeIo>(this: &mut T) -> io::Result<usize> {
-    let mut count = 0;
+fn get_ovl_result<T: PipeIo>(this: &mut T, count: &mut u32) -> io::Result<usize> {
     let result = unsafe {
         let io_obj = this.io_obj();
         GetOverlappedResult(io_obj.handle,
                             &mut *io_obj.ovl.ovl,
-                            &mut count,
+                            count,
                             TRUE)
     };
     if result != 0 {
-        Ok(count as usize)
+        Ok(*count as usize)
     } else {
         Err(io::Error::last_os_error())
     }
@@ -1280,8 +1290,8 @@ fn test_io_single_thread() {
         }
         w_handle.wait().unwrap();
     }
-
     let connecting_server = server.disconnect().unwrap();
+
     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
     let mut server = connecting_server.wait().unwrap();
     {
@@ -1390,7 +1400,6 @@ fn test_timeout() {
         client.write(b"done").unwrap();
         client.flush().unwrap();
         assert_eq!(b"0123456789", &buf[..]);
-        thread::park();
     });
 
     let mut buf = [0; 4];
@@ -1403,6 +1412,5 @@ fn test_timeout() {
     server.set_read_timeout(None);
     server.read(&mut buf).unwrap();
 
-    t1.thread().unpark();
     t1.join().unwrap();
 }
