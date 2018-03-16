@@ -101,6 +101,9 @@ struct Overlapped {
     event: Event,
 }
 
+unsafe impl Send for Overlapped {}
+unsafe impl Sync for Overlapped {}
+
 impl Overlapped {
     fn new() -> io::Result<Overlapped> {
         let event = try!(Event::new());
