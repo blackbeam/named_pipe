@@ -148,26 +148,34 @@ impl OpenMode {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum PipeMode {
+pub enum ReadMode {
     Message,
     Byte,
 }
 
-impl PipeMode {
+impl ReadMode {
     fn val(&self) -> u32 {
         match self {
-            &PipeMode::Message => PIPE_READMODE_MESSAGE,
-            &PipeMode::Byte => PIPE_READMODE_BYTE,
-        }
-    }
-    fn pipe_type(&self) -> u32 {
-        match self {
-            &PipeMode::Message => PIPE_TYPE_MESSAGE,
-            &PipeMode::Byte => PIPE_TYPE_BYTE,
+            &ReadMode::Message => PIPE_READMODE_MESSAGE,
+            &ReadMode::Byte => PIPE_READMODE_BYTE,
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum TypeMode {
+    Message,
+    Byte,
+}
+
+impl TypeMode {
+    fn val(&self) -> u32 {
+        match self {
+            &TypeMode::Message => PIPE_TYPE_MESSAGE,
+            &TypeMode::Byte => PIPE_TYPE_BYTE,
+        }
+    }
+}
 /// Options and flags which can be used to configure how a pipe is created.
 ///
 /// This builder exposes the ability to configure how a `ConnectingServer` is created.
@@ -183,7 +191,8 @@ impl PipeMode {
 pub struct PipeOptions {
     name: Arc<Vec<u16>>,
     open_mode: OpenMode,
-    pipe_mode: PipeMode,
+    read_mode: PipeReadMode,
+    type_mode: PipeTypeMode,
     out_buffer: u32,
     in_buffer: u32,
     first: bool,
@@ -195,7 +204,7 @@ impl PipeOptions {
             CreateNamedPipeW(self.name.as_ptr(),
                              (self.open_mode.val() | FILE_FLAG_OVERLAPPED |
                               if first { FILE_FLAG_FIRST_PIPE_INSTANCE } else { 0 }),
-                             self.pipe_mode.pipe_type() | self.pipe_mode.val() | PIPE_WAIT,
+                             self.read_mode.val() | self.type_mode.val() | PIPE_WAIT,
                              PIPE_UNLIMITED_INSTANCES,
                              65536,
                              65536,
@@ -217,7 +226,8 @@ impl PipeOptions {
         PipeOptions {
             name: Arc::new(full_name),
             open_mode: OpenMode::Duplex,
-            pipe_mode: PipeMode::Byte,
+            read_mode: ReadMode::Byte,
+            type_mode: TypeMode::Byte,
             out_buffer: 65536,
             in_buffer: 65536,
             first: true,
@@ -236,9 +246,15 @@ impl PipeOptions {
         self
     }
 
-    /// Open mode for pipe instance. Defaults to `Duplex`.
-    pub fn pipe_mode(&mut self, val: PipeMode) -> &mut PipeOptions {
-        self.pipe_mode = val;
+    /// Read mode for pipe instance. Defaults to `Byte`.
+    pub fn read_mode(&mut self, val: PipeReadMode) -> &mut PipeOptions {
+        self.read_mode = val;
+        self
+    }
+
+    /// Type mode for pipe instance. Defaults to `Byte`.
+    pub fn type_mode(&mut self, val: PipeReadMode) -> &mut PipeOptions {
+        self.type_mode = val;
         self
     }
 
@@ -265,6 +281,9 @@ impl PipeOptions {
 
     /// Creates multiple instances of pipe with this options.
     pub fn multiple(&self, num: u32) -> io::Result<Vec<ConnectingServer>> {
+        if self.type_mode == TypeMode::Byte && self.read_mode != ReadMode::Byte {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "A byte type pipe can not operate in byte-read mode!"));
+        }
         if num == 0 {
             return Ok(Vec::new())
         }
