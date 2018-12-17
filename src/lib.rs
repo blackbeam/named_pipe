@@ -191,8 +191,8 @@ impl TypeMode {
 pub struct PipeOptions {
     name: Arc<Vec<u16>>,
     open_mode: OpenMode,
-    read_mode: PipeReadMode,
-    type_mode: PipeTypeMode,
+    read_mode: ReadMode,
+    type_mode: TypeMode,
     out_buffer: u32,
     in_buffer: u32,
     first: bool,
@@ -247,13 +247,13 @@ impl PipeOptions {
     }
 
     /// Read mode for pipe instance. Defaults to `Byte`.
-    pub fn read_mode(&mut self, val: PipeReadMode) -> &mut PipeOptions {
+    pub fn read_mode(&mut self, val: ReadMode) -> &mut PipeOptions {
         self.read_mode = val;
         self
     }
 
     /// Type mode for pipe instance. Defaults to `Byte`.
-    pub fn type_mode(&mut self, val: PipeReadMode) -> &mut PipeOptions {
+    pub fn type_mode(&mut self, val: TypeMode) -> &mut PipeOptions {
         self.type_mode = val;
         self
     }
