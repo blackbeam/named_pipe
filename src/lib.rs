@@ -147,6 +147,27 @@ impl OpenMode {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum PipeMode {
+    Message,
+    Byte,
+}
+
+impl PipeMode {
+    fn val(&self) -> u32 {
+        match self {
+            &PipeMode::Message => PIPE_READMODE_MESSAGE,
+            &PipeMode::Byte => PIPE_READMODE_BYTE,
+        }
+    }
+    fn pipe_type(&self) -> u32 {
+        match self {
+            &PipeMode::Message => PIPE_TYPE_MESSAGE,
+            &PipeMode::Byte => PIPE_TYPE_BYTE,
+        }
+    }
+}
+
 /// Options and flags which can be used to configure how a pipe is created.
 ///
 /// This builder exposes the ability to configure how a `ConnectingServer` is created.
@@ -154,6 +175,7 @@ impl OpenMode {
 /// Builder defaults:
 ///
 /// - **open_mode** - `Duplex`
+/// - **pipe_mode** - `Byte`
 /// - **in_buffer** - 65536
 /// - **out_buffer** - 65536
 /// - **first** - true
@@ -161,6 +183,7 @@ impl OpenMode {
 pub struct PipeOptions {
     name: Arc<Vec<u16>>,
     open_mode: OpenMode,
+    pipe_mode: PipeMode,
     out_buffer: u32,
     in_buffer: u32,
     first: bool,
@@ -171,8 +194,8 @@ impl PipeOptions {
         let handle = unsafe {
             CreateNamedPipeW(self.name.as_ptr(),
                              (self.open_mode.val() | FILE_FLAG_OVERLAPPED |
-                              if first {FILE_FLAG_FIRST_PIPE_INSTANCE} else {0}),
-                             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                              if first { FILE_FLAG_FIRST_PIPE_INSTANCE } else { 0 }),
+                             self.pipe_mode.pipe_type() | self.pipe_mode.val() | PIPE_WAIT,
                              PIPE_UNLIMITED_INSTANCES,
                              65536,
                              65536,
@@ -194,6 +217,7 @@ impl PipeOptions {
         PipeOptions {
             name: Arc::new(full_name),
             open_mode: OpenMode::Duplex,
+            pipe_mode: PipeMode::Byte,
             out_buffer: 65536,
             in_buffer: 65536,
             first: true,
@@ -209,6 +233,12 @@ impl PipeOptions {
     /// Open mode for pipe instance. Defaults to `Duplex`.
     pub fn open_mode(&mut self, val: OpenMode) -> &mut PipeOptions {
         self.open_mode = val;
+        self
+    }
+
+    /// Open mode for pipe instance. Defaults to `Duplex`.
+    pub fn pipe_mode(&mut self, val: PipeMode) -> &mut PipeOptions {
+        self.pipe_mode = val;
         self
     }
 
