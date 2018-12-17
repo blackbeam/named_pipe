@@ -24,22 +24,20 @@
 //! To create new pipe instance use [`PipeOptions`](struct.PipeOptions.html) structure.
 //!
 //! To connect to a pipe server use [`PipeClient`](struct.PipeClient.html) structure.
-extern crate winapi;
 extern crate kernel32;
+extern crate winapi;
 
-use std::io;
+use kernel32::*;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::io;
+use std::marker::PhantomData;
 use std::mem;
+use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::RawHandle;
 use std::ptr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::marker::PhantomData;
-use std::ffi::{OsStr, OsString};
-use std::os::windows::io::RawHandle;
-use std::os::windows::ffi::OsStrExt;
-
-use kernel32::*;
-
 use winapi::*;
 
 #[derive(Debug)]
@@ -53,8 +51,9 @@ impl Drop for Handle {
     }
 }
 
-unsafe impl Sync for Handle { }
-unsafe impl Send for Handle { }
+unsafe impl Sync for Handle {}
+
+unsafe impl Send for Handle {}
 
 #[derive(Debug)]
 struct Event {
@@ -102,6 +101,7 @@ struct Overlapped {
 }
 
 unsafe impl Send for Overlapped {}
+
 unsafe impl Sync for Overlapped {}
 
 impl Overlapped {
@@ -147,6 +147,27 @@ impl OpenMode {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum PipeMode {
+    Message,
+    Byte,
+}
+
+impl PipeMode {
+    fn val(&self) -> u32 {
+        match self {
+            &PipeMode::Message => PIPE_READMODE_MESSAGE,
+            &PipeMode::Byte => PIPE_READMODE_BYTE,
+        }
+    }
+    fn pipe_type(&self) -> u32 {
+        match self {
+            &PipeMode::Message => PIPE_TYPE_MESSAGE,
+            &PipeMode::Byte => PIPE_TYPE_BYTE,
+        }
+    }
+}
+
 /// Options and flags which can be used to configure how a pipe is created.
 ///
 /// This builder exposes the ability to configure how a `ConnectingServer` is created.
@@ -161,6 +182,7 @@ impl OpenMode {
 pub struct PipeOptions {
     name: Arc<Vec<u16>>,
     open_mode: OpenMode,
+    pipe_mode: PipeMode,
     out_buffer: u32,
     in_buffer: u32,
     first: bool,
@@ -171,8 +193,8 @@ impl PipeOptions {
         let handle = unsafe {
             CreateNamedPipeW(self.name.as_ptr(),
                              (self.open_mode.val() | FILE_FLAG_OVERLAPPED |
-                              if first {FILE_FLAG_FIRST_PIPE_INSTANCE} else {0}),
-                             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                 if first { FILE_FLAG_FIRST_PIPE_INSTANCE } else { 0 }),
+                             self.pipe_mode.pipe_type() | self.pipe_mode.val() | PIPE_WAIT,
                              PIPE_UNLIMITED_INSTANCES,
                              65536,
                              65536,
@@ -194,6 +216,7 @@ impl PipeOptions {
         PipeOptions {
             name: Arc::new(full_name),
             open_mode: OpenMode::Duplex,
+            pipe_mode: PipeMode::Byte,
             out_buffer: 65536,
             in_buffer: 65536,
             first: true,
@@ -209,6 +232,12 @@ impl PipeOptions {
     /// Open mode for pipe instance. Defaults to `Duplex`.
     pub fn open_mode(&mut self, val: OpenMode) -> &mut PipeOptions {
         self.open_mode = val;
+        self
+    }
+
+    /// Open mode for pipe instance. Defaults to `Duplex`.
+    pub fn pipe_mode(&mut self, val: PipeMode) -> &mut PipeOptions {
+        self.pipe_mode = val;
         self
     }
 
@@ -236,7 +265,7 @@ impl PipeOptions {
     /// Creates multiple instances of pipe with this options.
     pub fn multiple(&self, num: u32) -> io::Result<Vec<ConnectingServer>> {
         if num == 0 {
-            return Ok(Vec::new())
+            return Ok(Vec::new());
         }
         let mut out = Vec::with_capacity(num as usize);
         let mut first = self.first;
@@ -280,11 +309,11 @@ impl ConnectingServer {
                 Some(_) => {
                     let mut dummy = 0;
                     try!(get_ovl_result(&mut self, &mut dummy));
-                },
+                }
                 None => return Ok(Err(self)),
             }
         }
-        let ConnectingServer { handle, mut ovl, ..} = self;
+        let ConnectingServer { handle, mut ovl, .. } = self;
         ovl.clear()?;
         Ok(Ok(PipeServer {
             handle: Some(handle),
@@ -431,7 +460,7 @@ impl io::Write for PipeServer {
                 } else {
                     Err(io::Error::last_os_error())
                 }
-            },
+            }
             None => unreachable!(),
         }
     }
@@ -475,21 +504,21 @@ impl PipeClient {
             match unsafe { GetLastError() } {
                 ERROR_PIPE_BUSY => {
                     unsafe { WaitNamedPipeW(name.as_ptr(), 0) };
-                },
+                }
                 ERROR_ACCESS_DENIED => match mode {
                     mode if mode == (GENERIC_READ | GENERIC_WRITE) => {
                         return PipeClient::create_file(name, GENERIC_READ | FILE_WRITE_ATTRIBUTES);
-                    },
+                    }
                     mode if mode == (GENERIC_READ | FILE_WRITE_ATTRIBUTES) => {
                         return PipeClient::create_file(name, GENERIC_WRITE | FILE_READ_ATTRIBUTES);
-                    },
+                    }
                     _ => {
                         return Err(io::Error::last_os_error());
                     }
                 },
                 _ => {
                     return Err(io::Error::last_os_error());
-                },
+                }
             }
         }
     }
@@ -526,10 +555,10 @@ impl PipeClient {
                     } else {
                         return Err(io::Error::last_os_error());
                     }
-                },
+                }
                 Err(err) => {
                     if err.raw_os_error().unwrap() == ERROR_PIPE_BUSY as i32 {
-                        if ! waited {
+                        if !waited {
                             waited = true;
                             let result = unsafe { WaitNamedPipeW(full_name.as_ptr(), timeout) };
                             if result == 0 {
@@ -541,7 +570,7 @@ impl PipeClient {
                     } else {
                         return Err(err);
                     }
-                },
+                }
             }
         }
     }
@@ -653,7 +682,7 @@ pub struct PipeIoObj<'a> {
 pub struct PipeIoHandles<'a> {
     pipe_handle: RawHandle,
     event_handle: RawHandle,
-    _phantom: PhantomData<&'a ()>
+    _phantom: PhantomData<&'a ()>,
 }
 
 /// This trait used for genericity.
@@ -870,22 +899,22 @@ impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
         match self.io_ref {
             Some(ref io) => {
                 fmt.debug_struct("ReadHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &io.io_handles())
-                 .field("bytes_read", &self.bytes_read)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
-            },
+                    .field("io", &self.io)
+                    .field("io_ref", &io.io_handles())
+                    .field("bytes_read", &self.bytes_read)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
+            }
             None => {
                 fmt.debug_struct("ReadHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &"None")
-                 .field("bytes_read", &self.bytes_read)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
-            },
+                    .field("io", &self.io)
+                    .field("io_ref", &"None")
+                    .field("bytes_read", &self.bytes_read)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
+            }
         }
     }
 }
@@ -904,7 +933,7 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
                             Ok(())
                         }
                     }
-                },
+                }
                 None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe")),
             }
         } else {
@@ -956,24 +985,24 @@ impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
         match self.io_ref {
             Some(ref io) => {
                 fmt.debug_struct("WriteHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &io.io_handles())
-                 .field("bytes_written", &self.bytes_written)
-                 .field("num_bytes", &self.num_bytes)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
-            },
+                    .field("io", &self.io)
+                    .field("io_ref", &io.io_handles())
+                    .field("bytes_written", &self.bytes_written)
+                    .field("num_bytes", &self.num_bytes)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
+            }
             None => {
                 fmt.debug_struct("WriteHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &"None")
-                 .field("bytes_written", &self.bytes_written)
-                 .field("num_bytes", &self.num_bytes)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
-            },
+                    .field("io", &self.io)
+                    .field("io_ref", &"None")
+                    .field("bytes_written", &self.bytes_written)
+                    .field("num_bytes", &self.num_bytes)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
+            }
         }
     }
 }
@@ -989,10 +1018,10 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
                         x if x as u32 == self.num_bytes => {
                             self.bytes_written = bytes_written;
                             Ok(())
-                        },
+                        }
                         _ => Err(io::Error::last_os_error()),
                     }
-                },
+                }
                 None => {
                     Err(io::Error::new(io::ErrorKind::TimedOut,
                                        "timed out while writing into pipe"))
@@ -1009,7 +1038,7 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
     /// was created as a result of `T::write_async_owned`.
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         try!(self.wait_impl());
-        let WriteHandle {io, bytes_written, buffer, ..} = self;
+        let WriteHandle { io, bytes_written, buffer, .. } = self;
         if let Some(buf) = buffer {
             if let Some(io) = io {
                 Ok((bytes_written as usize, Some((io, buf))))
@@ -1027,7 +1056,7 @@ fn connect_named_pipe(handle: &Handle, ovl: &mut Overlapped) -> io::Result<bool>
     let result = unsafe { ConnectNamedPipe(handle.value, ovl.get_mut()) };
     if result == TRUE {
         // Overlapped ConnectNamedPipe should return FALSE
-        return Err(io::Error::last_os_error())
+        return Err(io::Error::last_os_error());
     } else {
         let err = io::Error::last_os_error();
         let mut pending = false;
@@ -1041,7 +1070,7 @@ fn connect_named_pipe(handle: &Handle, ovl: &mut Overlapped) -> io::Result<bool>
 }
 
 fn init_read<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, T>>
-where T: PipeIo {
+    where T: PipeIo {
     let mut bytes_read = 0;
     let result = unsafe {
         let io_obj = this.io_obj();
@@ -1112,7 +1141,7 @@ fn init_read_owned<T: PipeIo>(mut this: T, mut buf: Vec<u8>) -> io::Result<ReadH
 }
 
 fn init_write<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b [u8]) -> io::Result<WriteHandle<'a, T>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(buf.len() <= 0xFFFFFFFF);
     let mut bytes_written = 0;
     let result = unsafe {
@@ -1151,7 +1180,7 @@ where T: PipeIo {
 }
 
 fn init_write_owned<'a, 'b: 'a, T>(mut this: T, buf: Vec<u8>) -> io::Result<WriteHandle<'static, T>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(buf.len() <= 0xFFFFFFFF);
     let mut bytes_written = 0;
     let result = unsafe {
@@ -1205,7 +1234,7 @@ fn get_ovl_result<T: PipeIo>(this: &mut T, count: &mut u32) -> io::Result<usize>
 }
 
 fn wait_for_single_obj<T>(this: &mut T, timeout: u32) -> io::Result<Option<usize>>
-where T: PipeIo {
+    where T: PipeIo {
     let result = unsafe {
         let io_obj = this.io_obj();
         WaitForSingleObject(io_obj.ovl.event.handle.value,
@@ -1221,7 +1250,7 @@ where T: PipeIo {
 }
 
 fn wait_for_multiple_obj<T>(list: &[T], all: bool, timeout: u32) -> io::Result<Option<usize>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(list.len() <= MAXIMUM_WAIT_OBJECTS as usize);
     if list.len() == 0 {
         Ok(None)
