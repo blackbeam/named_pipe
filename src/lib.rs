@@ -931,11 +931,9 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
             if let Some(buf) = buffer {
                 if let Some(io) = io {
                     Ok((bytes_read as usize, Some((io, buf))))
-                } else if let Some(io_ref) = io_ref {
-                    if let Some(original_buffer) = original_buffer {
-                        for i in 0..buf.len() {
-                            original_buffer[i] = buf[i];
-                        }
+                } else if let (Some(io_ref), Some(mut original_buffer)) = (io_ref, original_buffer) {
+                    for i in 0..buf.len() {
+                        original_buffer[i] = buf[i];
                     }
                     Ok((bytes_read as usize, None))
                 } else {
