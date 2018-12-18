@@ -1446,3 +1446,36 @@ fn test_io_multiple_threads() {
 
      t1.join().unwrap();
  }
+
+#[test]
+fn test_race_condition_read() {
+    use std::io::{ErrorKind, Read, Write};
+    let helper_function = |client: &mut PipeClient, first: bool| {
+        let mut buf = [0; 10];
+        if first {
+            match client.read(&mut buf) {
+                Ok(size) => assert_eq!(buf.to_vec(), b"0123456789".to_vec()),
+                Err(err) => assert_eq!(err.kind(), ErrorKind::TimedOut),
+            }
+        } else {
+            assert_eq!(buf, [0; 10]);
+            std::thread::sleep(Duration::from_millis(100*2));
+            assert_eq!(buf, [0; 10]);
+        }
+    };
+    let name = r"\\.\pipe\named_pipe_test";
+    let server = PipeOptions::new(name).single().unwrap();
+    let t1 = std::thread::spawn(move || {
+        let mut client = PipeClient::connect(name).unwrap();
+        client.set_read_timeout(Some(Duration::from_millis(10)));
+
+        helper_function(&mut client, true);
+        helper_function(&mut client, false);
+    });
+
+    std::thread::sleep(Duration::from_millis(100));
+    let mut server = server.wait().unwrap();
+    server.write(b"0123456789").unwrap();
+
+    t1.join().unwrap();
+}
