@@ -863,6 +863,7 @@ pub struct ReadHandle<'a, T> {
     bytes_read: u32,
     pending: bool,
     buffer: Option<Vec<u8>>,
+    original_buffer: Option<&'a mut [u8]>,
 }
 
 impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
@@ -926,10 +927,17 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         let result = self.wait_impl();
         let output = {
-            let ReadHandle { io, io_ref: _, bytes_read, pending: _, buffer } = self;
+            let ReadHandle { io, io_ref, bytes_read, pending: _, buffer, original_buffer } = self;
             if let Some(buf) = buffer {
                 if let Some(io) = io {
                     Ok((bytes_read as usize, Some((io, buf))))
+                } else if let Some(io_ref) = io_ref {
+                    if let Some(original_buffer) = original_buffer {
+                        for i in 0..buf.len() {
+                            original_buffer[i] = buf[i];
+                        }
+                    }
+                    Ok((bytes_read as usize, None))
                 } else {
                     unreachable!()
                 }
@@ -1077,6 +1085,7 @@ fn init_read<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b mut [u8]) -> io::Result<Re
             bytes_read: bytes_read,
             pending: false,
             buffer: None,
+            original_buffer: None,
         })
     } else {
         let err = io::Error::last_os_error();
@@ -1086,7 +1095,8 @@ fn init_read<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b mut [u8]) -> io::Result<Re
                 io_ref: Some(this),
                 bytes_read: 0,
                 pending: true,
-                buffer: None,
+                buffer: Some(buffer),
+                original_buffer: Some(buf),
             })
         } else {
             Err(err)
@@ -1112,6 +1122,7 @@ fn init_read_owned<T: PipeIo>(mut this: T, mut buf: Vec<u8>) -> io::Result<ReadH
             bytes_read: bytes_read,
             pending: false,
             buffer: Some(buf),
+            original_buffer: None,
         })
     } else {
         let err = io::Error::last_os_error();
@@ -1122,6 +1133,7 @@ fn init_read_owned<T: PipeIo>(mut this: T, mut buf: Vec<u8>) -> io::Result<ReadH
                 bytes_read: 0,
                 pending: true,
                 buffer: Some(buf),
+                original_buffer: None,
             })
         } else {
             Err(err)
@@ -1290,50 +1302,50 @@ pub fn wait<T: PipeIo>(list: &[T]) -> io::Result<usize> {
     }
 }
 
-#[test]
-fn test_io_single_thread() {
-    let connecting_server = PipeOptions::new(r"\\.\pipe\test_io_single_thread").single().unwrap();
-    let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
-    let mut server = connecting_server.wait().unwrap();
-    {
-        let w_handle = server.write_async(b"0123456789").unwrap();
-        {
-            let mut buf = [0; 5];
-            {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
-                r_handle.wait().unwrap();
-            }
-            assert_eq!(&buf[..], b"01234");
-            {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
-                r_handle.wait().unwrap();
-            }
-            assert_eq!(&buf[..], b"56789");
-        }
-        w_handle.wait().unwrap();
-    }
-    let connecting_server = server.disconnect().unwrap();
+ #[test]
+ fn test_io_single_thread() {
+     let connecting_server = PipeOptions::new(r"\\.\pipe\test_io_single_thread").single().unwrap();
+     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
+     let mut server = connecting_server.wait().unwrap();
+     {
+         let w_handle = server.write_async(b"0123456789").unwrap();
+         {
+             let mut buf = [0; 5];
+             {
+                 let r_handle = client.read_async(&mut buf[..]).unwrap();
+                 r_handle.wait().unwrap();
+             }
+             assert_eq!(&buf[..], b"01234");
+             {
+                 let r_handle = client.read_async(&mut buf[..]).unwrap();
+                 r_handle.wait().unwrap();
+             }
+             assert_eq!(&buf[..], b"56789");
+         }
+         w_handle.wait().unwrap();
+     }
+     let connecting_server = server.disconnect().unwrap();
 
-    let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
-    let mut server = connecting_server.wait().unwrap();
-    {
-        let w_handle = server.write_async(b"0123456789").unwrap();
-        {
-            let mut buf = [0; 5];
-            {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
-                r_handle.wait().unwrap();
-            }
-            assert_eq!(&buf[..], b"01234");
-            {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
-                r_handle.wait().unwrap();
-            }
-            assert_eq!(&buf[..], b"56789");
-        }
-        w_handle.wait().unwrap();
-    }
-}
+     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
+     let mut server = connecting_server.wait().unwrap();
+     {
+         let w_handle = server.write_async(b"0123456789").unwrap();
+         {
+             let mut buf = [0; 5];
+             {
+                 let r_handle = client.read_async(&mut buf[..]).unwrap();
+                 r_handle.wait().unwrap();
+             }
+             assert_eq!(&buf[..], b"01234");
+             {
+                 let r_handle = client.read_async(&mut buf[..]).unwrap();
+                 r_handle.wait().unwrap();
+             }
+             assert_eq!(&buf[..], b"56789");
+         }
+         w_handle.wait().unwrap();
+     }
+ }
 
 #[test]
 fn test_io_multiple_threads() {
@@ -1375,64 +1387,64 @@ fn test_io_multiple_threads() {
     assert_eq!(b"56789", &t2.join().unwrap()[..]);
 }
 
-#[test]
-fn test_wait() {
-    use std::thread;
-    use std::io::{Read, Write};
+ #[test]
+ fn test_wait() {
+     use std::thread;
+     use std::io::{Read, Write};
 
-    let mut servers = PipeOptions::new(r"\\.\pipe\test_wait").multiple(16).unwrap();
-    let t1 = thread::spawn(move || {
-        for _ in 0..16 {
-            let mut buf = [0; 10];
-            let mut client = PipeClient::connect(r"\\.\pipe\test_wait").unwrap();
-            client.read(&mut buf).unwrap();
-            client.write(b"done").unwrap();
-            assert_eq!(b"0123456789", &buf[..]);
-        }
-    });
+     let mut servers = PipeOptions::new(r"\\.\pipe\test_wait").multiple(16).unwrap();
+     let t1 = thread::spawn(move || {
+         for _ in 0..16 {
+             let mut buf = [0; 10];
+             let mut client = PipeClient::connect(r"\\.\pipe\test_wait").unwrap();
+             client.read(&mut buf).unwrap();
+             client.write(b"done").unwrap();
+             assert_eq!(b"0123456789", &buf[..]);
+         }
+     });
 
-    while servers.len() > 0 {
-        let mut buf = [0; 4];
-        let which = wait(servers.as_ref()).unwrap();
-        let mut server = servers.remove(which).wait().unwrap();
-        server.write(b"0123456789").unwrap();
-        server.read(&mut buf).unwrap();
-        assert_eq!(b"done", &buf[..]);
-    }
+     while servers.len() > 0 {
+         let mut buf = [0; 4];
+         let which = wait(servers.as_ref()).unwrap();
+         let mut server = servers.remove(which).wait().unwrap();
+         server.write(b"0123456789").unwrap();
+         server.read(&mut buf).unwrap();
+         assert_eq!(b"done", &buf[..]);
+     }
 
-    t1.join().unwrap();
-}
+     t1.join().unwrap();
+ }
 
-#[test]
-fn test_timeout() {
-    use std::thread;
-    use std::time::Duration;
-    use std::io::{self, Read, Write};
+ #[test]
+ fn test_timeout() {
+     use std::thread;
+     use std::time::Duration;
+     use std::io::{self, Read, Write};
 
-    let server = PipeOptions::new(r"\\.\pipe\test_timeout").single().unwrap();
-    let t1 = thread::spawn(move || {
-        let mut buf = [0; 10];
-        let mut client = PipeClient::connect(r"\\.\pipe\test_timeout").unwrap();
-        client.set_read_timeout(Some(Duration::from_millis(10)));
-        let err = client.read(&mut buf).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
-        client.set_read_timeout(None);
-        client.read(&mut buf).unwrap();
-        thread::sleep(Duration::from_millis(200));
-        client.write(b"done").unwrap();
-        client.flush().unwrap();
-        assert_eq!(b"0123456789", &buf[..]);
-    });
+     let server = PipeOptions::new(r"\\.\pipe\test_timeout").single().unwrap();
+     let t1 = thread::spawn(move || {
+         let mut buf = [0; 10];
+         let mut client = PipeClient::connect(r"\\.\pipe\test_timeout").unwrap();
+         client.set_read_timeout(Some(Duration::from_millis(10)));
+         let err = client.read(&mut buf).unwrap_err();
+         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+         client.set_read_timeout(None);
+         client.read(&mut buf).unwrap();
+         thread::sleep(Duration::from_millis(200));
+         client.write(b"done").unwrap();
+         client.flush().unwrap();
+         assert_eq!(b"0123456789", &buf[..]);
+     });
 
-    let mut buf = [0; 4];
-    thread::sleep(Duration::from_millis(200));
-    let mut server = server.wait().unwrap();
-    server.write(b"0123456789").unwrap();
-    server.set_read_timeout(Some(Duration::from_millis(10)));
-    let err = server.read(&mut buf).unwrap_err();
-    assert_eq!(err.kind(), io::ErrorKind::TimedOut);
-    server.set_read_timeout(None);
-    server.read(&mut buf).unwrap();
+     let mut buf = [0; 4];
+     thread::sleep(Duration::from_millis(200));
+     let mut server = server.wait().unwrap();
+     server.write(b"0123456789").unwrap();
+     server.set_read_timeout(Some(Duration::from_millis(10)));
+     let err = server.read(&mut buf).unwrap_err();
+     assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+     server.set_read_timeout(None);
+     server.read(&mut buf).unwrap();
 
-    t1.join().unwrap();
-}
+     t1.join().unwrap();
+ }
