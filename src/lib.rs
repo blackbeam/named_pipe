@@ -905,7 +905,15 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
                         }
                     }
                 },
-                None => Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe")),
+                None => {
+                    if let Some(ref mut io_ref) = self.io_ref {
+                        let io_obj = io_ref.io_obj();
+                        unsafe {
+                            CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl);
+                        }
+                    }
+                    Err(io::Error::new(io::ErrorKind::TimedOut, "timed out while reading from pipe"))
+                },
             }
         } else {
             Ok(())
@@ -994,6 +1002,12 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
                     }
                 },
                 None => {
+                    if let Some(ref mut io_ref) = self.io_ref {
+                        let io_obj = io_ref.io_obj();
+                        unsafe {
+                            CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl);
+                        }
+                    }
                     Err(io::Error::new(io::ErrorKind::TimedOut,
                                        "timed out while writing into pipe"))
                 }
