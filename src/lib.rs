@@ -870,21 +870,21 @@ impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
         match self.io_ref {
             Some(ref io) => {
                 fmt.debug_struct("ReadHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &io.io_handles())
-                 .field("bytes_read", &self.bytes_read)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
+                    .field("io", &self.io)
+                    .field("io_ref", &io.io_handles())
+                    .field("bytes_read", &self.bytes_read)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
             },
             None => {
                 fmt.debug_struct("ReadHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &"None")
-                 .field("bytes_read", &self.bytes_read)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
+                    .field("io", &self.io)
+                    .field("io_ref", &"None")
+                    .field("bytes_read", &self.bytes_read)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
             },
         }
     }
@@ -956,23 +956,23 @@ impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
         match self.io_ref {
             Some(ref io) => {
                 fmt.debug_struct("WriteHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &io.io_handles())
-                 .field("bytes_written", &self.bytes_written)
-                 .field("num_bytes", &self.num_bytes)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
+                    .field("io", &self.io)
+                    .field("io_ref", &io.io_handles())
+                    .field("bytes_written", &self.bytes_written)
+                    .field("num_bytes", &self.num_bytes)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
             },
             None => {
                 fmt.debug_struct("WriteHandle")
-                 .field("io", &self.io)
-                 .field("io_ref", &"None")
-                 .field("bytes_written", &self.bytes_written)
-                 .field("num_bytes", &self.num_bytes)
-                 .field("pending", &self.pending)
-                 .field("buffer", &self.buffer)
-                 .finish()
+                    .field("io", &self.io)
+                    .field("io_ref", &"None")
+                    .field("bytes_written", &self.bytes_written)
+                    .field("num_bytes", &self.num_bytes)
+                    .field("pending", &self.pending)
+                    .field("buffer", &self.buffer)
+                    .finish()
             },
         }
     }
@@ -1041,18 +1041,22 @@ fn connect_named_pipe(handle: &Handle, ovl: &mut Overlapped) -> io::Result<bool>
 }
 
 fn init_read<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, T>>
-where T: PipeIo {
+    where T: PipeIo {
     let mut bytes_read = 0;
+    let mut buffer = buf.to_vec();
     let result = unsafe {
         let io_obj = this.io_obj();
         ReadFile(io_obj.handle,
-                 buf.as_mut_ptr() as *mut c_void,
-                 buf.len() as u32,
+                 buffer.as_mut_ptr() as *mut c_void,
+                 buffer.len() as u32,
                  &mut bytes_read,
                  &mut *io_obj.ovl.ovl)
     };
 
     if result != 0 && bytes_read != 0 {
+        for i in 0..buffer.len() {
+            buf[i] = buffer[i];
+        }
         Ok(ReadHandle {
             io: None,
             io_ref: Some(this),
@@ -1112,14 +1116,15 @@ fn init_read_owned<T: PipeIo>(mut this: T, mut buf: Vec<u8>) -> io::Result<ReadH
 }
 
 fn init_write<'a, 'b: 'a, T>(this: &'a mut T, buf: &'b [u8]) -> io::Result<WriteHandle<'a, T>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(buf.len() <= 0xFFFFFFFF);
+    let buffer = buf.to_vec();
     let mut bytes_written = 0;
     let result = unsafe {
         let io_obj = this.io_obj();
         WriteFile(io_obj.handle,
-                  buf.as_ptr() as *mut c_void,
-                  buf.len() as u32,
+                  buffer.as_ptr() as *mut c_void,
+                  buffer.len() as u32,
                   &mut bytes_written,
                   &mut *io_obj.ovl.ovl)
     };
@@ -1130,7 +1135,7 @@ where T: PipeIo {
             io_ref: Some(this),
             buffer: None,
             bytes_written: bytes_written,
-            num_bytes: buf.len() as u32,
+            num_bytes: buffer.len() as u32,
             pending: false,
         })
     } else {
@@ -1141,7 +1146,7 @@ where T: PipeIo {
                 io_ref: Some(this),
                 buffer: None,
                 bytes_written: 0,
-                num_bytes: buf.len() as u32,
+                num_bytes: buffer.len() as u32,
                 pending: true,
             })
         } else {
@@ -1151,7 +1156,7 @@ where T: PipeIo {
 }
 
 fn init_write_owned<'a, 'b: 'a, T>(mut this: T, buf: Vec<u8>) -> io::Result<WriteHandle<'static, T>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(buf.len() <= 0xFFFFFFFF);
     let mut bytes_written = 0;
     let result = unsafe {
@@ -1205,7 +1210,7 @@ fn get_ovl_result<T: PipeIo>(this: &mut T, count: &mut u32) -> io::Result<usize>
 }
 
 fn wait_for_single_obj<T>(this: &mut T, timeout: u32) -> io::Result<Option<usize>>
-where T: PipeIo {
+    where T: PipeIo {
     let result = unsafe {
         let io_obj = this.io_obj();
         WaitForSingleObject(io_obj.ovl.event.handle.value,
@@ -1221,7 +1226,7 @@ where T: PipeIo {
 }
 
 fn wait_for_multiple_obj<T>(list: &[T], all: bool, timeout: u32) -> io::Result<Option<usize>>
-where T: PipeIo {
+    where T: PipeIo {
     assert!(list.len() <= MAXIMUM_WAIT_OBJECTS as usize);
     if list.len() == 0 {
         Ok(None)
