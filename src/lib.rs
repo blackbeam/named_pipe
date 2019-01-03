@@ -24,7 +24,7 @@
 //! To create new pipe instance use [`PipeOptions`](struct.PipeOptions.html) structure.
 //!
 //! To connect to a pipe server use [`PipeClient`](struct.PipeClient.html) structure.
-extern crate winapi;
+
 
 use winapi::{
     ctypes::*,
@@ -101,7 +101,7 @@ struct Overlapped {
 }
 
 impl fmt::Debug for Overlapped {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Overlapped")
             .field("ovl", &"OVERLAPPED")
             .field("event", &self.event)
@@ -931,14 +931,14 @@ impl PipeIo for ConnectingServer {
 /// (fn.wait_all.html) functions.
 pub struct ReadHandle<'a, T: PipeIo> {
     io: Option<T>,
-    io_ref: Option<&'a mut PipeIo>,
+    io_ref: Option<&'a mut dyn PipeIo>,
     bytes_read: u32,
     pending: bool,
     buffer: Option<Vec<u8>>,
 }
 
 impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for ReadHandle<'a, T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.io_ref {
             Some(ref io) => fmt
                 .debug_struct("ReadHandle")
@@ -1041,14 +1041,14 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
 pub struct WriteHandle<'a, T: PipeIo> {
     buffer: Option<Vec<u8>>,
     io: Option<T>,
-    io_ref: Option<&'a mut PipeIo>,
+    io_ref: Option<&'a mut dyn PipeIo>,
     bytes_written: u32,
     num_bytes: u32,
     pending: bool,
 }
 
 impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for WriteHandle<'a, T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.io_ref {
             Some(ref io) => fmt
                 .debug_struct("WriteHandle")
