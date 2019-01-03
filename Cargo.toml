@@ -9,9 +9,9 @@ documentation = "https://blackbeam.github.io/named_pipe/named_pipe/index.html"
 readme = "README.md"
 keywords = ["windows", "named", "pipes"]
 
-[dependencies]
-winapi = "~0.2.8"
-kernel32-sys = "~0.2.2"
+[dependencies.winapi]
+version = "0.3"
+features = ["errhandlingapi", "handleapi", "ioapiset", "minwindef", "namedpipeapi", "synchapi", "winbase", "winerror"]
 
 [profile.test]
 opt-level = 0
