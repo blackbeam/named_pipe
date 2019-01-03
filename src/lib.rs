@@ -169,15 +169,18 @@ pub struct PipeOptions {
 impl PipeOptions {
     fn create_named_pipe(&self, first: bool) -> io::Result<Handle> {
         let handle = unsafe {
-            CreateNamedPipeW(self.name.as_ptr(),
-                             (self.open_mode.val() | FILE_FLAG_OVERLAPPED |
-                              if first {FILE_FLAG_FIRST_PIPE_INSTANCE} else {0}),
-                             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                             PIPE_UNLIMITED_INSTANCES,
-                             65536,
-                             65536,
-                             0,
-                             ptr::null_mut())
+            CreateNamedPipeW(
+                self.name.as_ptr(),
+                self.open_mode.val()
+                | FILE_FLAG_OVERLAPPED
+                | if first {FILE_FLAG_FIRST_PIPE_INSTANCE} else {0},
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                PIPE_UNLIMITED_INSTANCES,
+                self.out_buffer,
+                self.in_buffer,
+                0,
+                ptr::null_mut(),
+            )
         };
 
         if handle != INVALID_HANDLE_VALUE {
