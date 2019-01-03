@@ -283,6 +283,7 @@ impl ConnectingServer {
                 Some(_) => {
                     let mut dummy = 0;
                     try!(get_ovl_result(&mut self, &mut dummy));
+                    self.pending = false;
                 },
                 None => return Ok(Err(self)),
             }
@@ -334,7 +335,11 @@ impl PipeServer {
     }
 
     /// Initializes asyncronous read opeation.
-    pub fn read_async<'a, 'b: 'a>(&'a mut self, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, Self>> {
+    ///
+    /// # Unsafety
+    /// It's unsafe to leak returned handle because read operation should be cancelled
+    /// by handle's destructor to not to write into `buf` that may be deallocated.
+    unsafe fn read_async<'a, 'b: 'a>(&'a mut self, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, Self>> {
         init_read(self, buf)
     }
 
@@ -344,7 +349,11 @@ impl PipeServer {
     }
 
     /// Initializes asyncronous write operation.
-    pub fn write_async<'a, 'b: 'a>(&'a mut self, buf: &'b [u8]) -> io::Result<WriteHandle<'a, Self>> {
+    ///
+    /// # Unsafety
+    /// It's unsafe to leak returned handle because write operation should be cancelled
+    /// by handle's destructor to not to read from `buf` that may be deallocated.
+    unsafe fn write_async<'a, 'b: 'a>(&'a mut self, buf: &'b [u8]) -> io::Result<WriteHandle<'a, Self>> {
         init_write(self, buf)
     }
 
@@ -408,7 +417,8 @@ impl PipeServer {
 
 impl io::Read for PipeServer {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let result = self.read_async(buf).and_then(|read_handle| read_handle.wait()).map(|x| x.0);
+        let read_handle = unsafe { self.read_async(buf) };
+        let result = read_handle.and_then(|read_handle| read_handle.wait()).map(|x| x.0);
         match result {
             Ok(x) => Ok(x),
             Err(err) => if err.raw_os_error() == Some(ERROR_BROKEN_PIPE as i32) {
@@ -422,7 +432,8 @@ impl io::Read for PipeServer {
 
 impl io::Write for PipeServer {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.write_async(buf).and_then(|write_handle| write_handle.wait()).map(|x| x.0)
+        let write_handle = unsafe { self.write_async(buf) };
+        write_handle.and_then(|write_handle| write_handle.wait()).map(|x| x.0)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -550,7 +561,11 @@ impl PipeClient {
     }
 
     /// Initializes asyncronous read operation.
-    pub fn read_async<'a, 'b: 'a>(&'a mut self, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, Self>> {
+    ///
+    /// # Unsafety
+    /// It's unsafe to leak returned handle because write operation should be cancelled
+    /// by handle's destructor to not to write into `buf` that may be deallocated.
+    unsafe fn read_async<'a, 'b: 'a>(&'a mut self, buf: &'b mut [u8]) -> io::Result<ReadHandle<'a, Self>> {
         init_read(self, buf)
     }
 
@@ -560,7 +575,11 @@ impl PipeClient {
     }
 
     /// Initializes asyncronous write operation.
-    pub fn write_async<'a, 'b: 'a>(&'a mut self, buf: &'b [u8]) -> io::Result<WriteHandle<'a, Self>> {
+    ///
+    /// # Unsafety
+    /// It's unsafe to leak returned handle because write operation should be cancelled
+    /// by handle's destructor to not to read from `buf` that may be deallocated.
+    unsafe fn write_async<'a, 'b: 'a>(&'a mut self, buf: &'b [u8]) -> io::Result<WriteHandle<'a, Self>> {
         init_write(self, buf)
     }
 
@@ -626,13 +645,15 @@ unsafe impl Send for PipeClient {}
 
 impl io::Read for PipeClient {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.read_async(buf).and_then(|read_handle| read_handle.wait()).map(|x| x.0)
+        let read_handle = unsafe { self.read_async(buf) };
+        read_handle.and_then(|read_handle| read_handle.wait()).map(|x| x.0)
     }
 }
 
 impl io::Write for PipeClient {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.write_async(buf).and_then(|write_handle| write_handle.wait()).map(|x| x.0)
+        let write_handle = unsafe { self.write_async(buf) };
+        write_handle.and_then(|write_handle| write_handle.wait()).map(|x| x.0)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -860,7 +881,7 @@ impl PipeIo for ConnectingServer {
 
 /// Pending read operation. Can be used with [`wait`](fn.wait.html) and [`wait_all`]
 /// (fn.wait_all.html) functions.
-pub struct ReadHandle<'a, T> {
+pub struct ReadHandle<'a, T: PipeIo> {
     io: Option<T>,
     io_ref: Option<&'a mut PipeIo>,
     bytes_read: u32,
@@ -868,7 +889,7 @@ pub struct ReadHandle<'a, T> {
     buffer: Option<Vec<u8>>,
 }
 
-impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
+impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for ReadHandle<'a, T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.io_ref {
             Some(ref io) => {
@@ -893,6 +914,24 @@ impl<'a, T: fmt::Debug> fmt::Debug for ReadHandle<'a, T> {
     }
 }
 
+impl<'a, T: PipeIo> Drop for ReadHandle<'a, T> {
+    fn drop(&mut self) {
+        if self.pending {
+            let result = unsafe {
+                let io_obj = self.io_obj();
+                CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl)
+            };
+            if result == FALSE {
+                let error = io::Error::last_os_error();
+                match error.raw_os_error().unwrap() as u32 {
+                    ERROR_IO_PENDING => (/* OK */),
+                    _ => panic!("CANCEL ERROR {:?}", error),
+                }
+            }
+        }
+    }
+}
+
 impl<'a, T: PipeIo> ReadHandle<'a, T> {
     fn wait_impl(&mut self) -> io::Result<()> {
         if self.pending {
@@ -900,6 +939,7 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
             match try!(wait_for_single_obj(self, timeout)) {
                 Some(_) => {
                     let mut count = 0;
+                    self.pending = false;
                     match try!(get_ovl_result(self, &mut count)) {
                         0 => Err(io::Error::last_os_error()),
                         _ => {
@@ -921,7 +961,9 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         let result = self.wait_impl();
         let output = {
-            let ReadHandle { io, io_ref: _, bytes_read, pending: _, buffer } = self;
+            let io = self.io.take();
+            let bytes_read = self.bytes_read;
+            let buffer = self.buffer.take();
             if let Some(buf) = buffer {
                 if let Some(io) = io {
                     Ok((bytes_read as usize, Some((io, buf))))
@@ -945,7 +987,7 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
 
 /// Pending write operation. Can be used with [`wait`](fn.wait.html) and [`wait_all`]
 /// (fn.wait_all.html) functions.
-pub struct WriteHandle<'a, T> {
+pub struct WriteHandle<'a, T: PipeIo> {
     buffer: Option<Vec<u8>>,
     io: Option<T>,
     io_ref: Option<&'a mut PipeIo>,
@@ -954,7 +996,7 @@ pub struct WriteHandle<'a, T> {
     pending: bool,
 }
 
-impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
+impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for WriteHandle<'a, T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.io_ref {
             Some(ref io) => {
@@ -981,6 +1023,24 @@ impl<'a, T: fmt::Debug> fmt::Debug for WriteHandle<'a, T> {
     }
 }
 
+impl<'a, T: PipeIo> Drop for WriteHandle<'a, T> {
+    fn drop(&mut self) {
+        if self.pending {
+            let result = unsafe {
+                let io_obj = self.io_obj();
+                CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl)
+            };
+            if result == FALSE {
+                let error = io::Error::last_os_error();
+                match error.raw_os_error().unwrap() as u32 {
+                    ERROR_IO_PENDING => (/* OK */),
+                    _ => panic!("CANCEL ERROR {:?}", error),
+                }
+            }
+        }
+    }
+}
+
 impl<'a, T: PipeIo> WriteHandle<'a, T> {
     fn wait_impl(&mut self) -> io::Result<()> {
         if self.pending {
@@ -988,6 +1048,7 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
             match try!(wait_for_single_obj(self, timeout)) {
                 Some(_) => {
                     let mut bytes_written = 0;
+                    self.pending = false;
                     match try!(get_ovl_result(self, &mut bytes_written)) {
                         x if x as u32 == self.num_bytes => {
                             self.bytes_written = bytes_written;
@@ -1012,7 +1073,9 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
     /// was created as a result of `T::write_async_owned`.
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
         try!(self.wait_impl());
-        let WriteHandle {io, bytes_written, buffer, ..} = self;
+        let io = self.io.take();
+        let bytes_written = self.bytes_written;
+        let buffer = self.buffer.take();
         if let Some(buf) = buffer {
             if let Some(io) = io {
                 Ok((bytes_written as usize, Some((io, buf))))
@@ -1280,16 +1343,16 @@ fn test_io_single_thread() {
     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
     let mut server = connecting_server.wait().unwrap();
     {
-        let w_handle = server.write_async(b"0123456789").unwrap();
+        let w_handle = unsafe { server.write_async(b"0123456789").unwrap() };
         {
             let mut buf = [0; 5];
             {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
+                let r_handle = unsafe { client.read_async(&mut buf[..]).unwrap() };
                 r_handle.wait().unwrap();
             }
             assert_eq!(&buf[..], b"01234");
             {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
+                let r_handle = unsafe { client.read_async(&mut buf[..]).unwrap() };
                 r_handle.wait().unwrap();
             }
             assert_eq!(&buf[..], b"56789");
@@ -1301,16 +1364,16 @@ fn test_io_single_thread() {
     let mut client = PipeClient::connect(r"\\.\pipe\test_io_single_thread").unwrap();
     let mut server = connecting_server.wait().unwrap();
     {
-        let w_handle = server.write_async(b"0123456789").unwrap();
+        let w_handle = unsafe { server.write_async(b"0123456789").unwrap() };
         {
             let mut buf = [0; 5];
             {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
+                let r_handle = unsafe { client.read_async(&mut buf[..]).unwrap() };
                 r_handle.wait().unwrap();
             }
             assert_eq!(&buf[..], b"01234");
             {
-                let r_handle = client.read_async(&mut buf[..]).unwrap();
+                let r_handle = unsafe { client.read_async(&mut buf[..]).unwrap() };
                 r_handle.wait().unwrap();
             }
             assert_eq!(&buf[..], b"56789");
@@ -1419,4 +1482,118 @@ fn test_timeout() {
     server.read(&mut buf).unwrap();
 
     t1.join().unwrap();
+}
+
+#[test]
+fn cancel_io_clien_read_on_timeout() {
+    use std::{io::{ErrorKind, Read, Write}, thread};
+
+    let name = r"\\.\pipe\cancel_io_client_read_on_timeout";
+    let server = PipeOptions::new(name).single().unwrap();
+
+    let handle = thread::spawn(move || {
+        let mut buf = [0; 10];
+
+        let mut client = PipeClient::connect(name).unwrap();
+        client.set_read_timeout(Some(Duration::from_millis(10)));
+
+        let err = client.read(&mut buf).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        assert_eq!(buf, [0; 10]);
+        thread::sleep(Duration::from_millis(100*2));
+        assert_eq!(buf, [0; 10]);
+    });
+
+    let mut server = server.wait().unwrap();
+    thread::sleep(Duration::from_millis(100));
+    server.write(b"0123456789").unwrap();
+
+    handle.join().unwrap();
+}
+
+#[test]
+fn cancel_io_server_read_on_timeout() {
+    use std::{io::{ErrorKind, Read, Write}, thread};
+
+    let name = r"\\.\pipe\cancel_io_server_read_on_timeout";
+    let server = PipeOptions::new(name).single().unwrap();
+
+    let handle = thread::spawn(move || {
+        let mut buf = [0; 10];
+
+        let mut server = server.wait().unwrap();
+        server.set_read_timeout(Some(Duration::from_millis(10)));
+        let err = server.read(&mut buf).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        assert_eq!(buf, [0; 10]);
+        thread::sleep(Duration::from_millis(100*2));
+        assert_eq!(buf, [0; 10]);
+    });
+
+    let mut client = PipeClient::connect(name).unwrap();
+    thread::sleep(Duration::from_millis(100));
+    client.write(b"0123456789").unwrap();
+
+    handle.join().unwrap();
+}
+
+#[test]
+fn cancel_io_client_write_on_timeout() {
+    use std::{io::{ErrorKind, Read, Write}, thread};
+    let mut buf = [0; 10];
+
+    let name = r"\\.\pipe\cancel_io_client_write_on_timeout";
+    let server = PipeOptions::new(name)
+        .out_buffer(0)
+        .in_buffer(0)
+        .single()
+        .unwrap();
+
+    let handle = thread::spawn(move || {
+        let mut client = PipeClient::connect(name).unwrap();
+
+        client.set_write_timeout(Some(Duration::from_millis(10)));
+        let err = client.write(b"0123456789").unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        thread::sleep(Duration::from_millis(100*2));
+    });
+
+    let mut server = server.wait().unwrap();
+
+    thread::sleep(Duration::from_millis(100));
+    let n = server.read(&mut buf[..]).unwrap();
+    assert_eq!(n, 0);
+    assert_eq!(buf, [0; 10]);
+
+    handle.join().unwrap();
+}
+
+#[test]
+fn cancel_io_server_write_on_timeout() {
+    use std::{io::{ErrorKind, Read, Write}, thread};
+    let mut buf = [0; 10];
+
+    let name = r"\\.\pipe\cancel_io_server_write_on_timeout";
+    let server = PipeOptions::new(name)
+        .out_buffer(0)
+        .in_buffer(0)
+        .single()
+        .unwrap();
+
+    let handle = thread::spawn(move || {
+        let mut server = server.wait().unwrap();
+
+        server.set_write_timeout(Some(Duration::from_millis(10)));
+        let err = server.write(b"0123456789").unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        thread::sleep(Duration::from_millis(100*3));
+    });
+
+    let mut client = PipeClient::connect(name).unwrap();
+
+    thread::sleep(Duration::from_millis(100));
+    let err = client.read(&mut buf[..]).unwrap_err();
+    assert_eq!(err.raw_os_error().unwrap(), ERROR_PIPE_NOT_CONNECTED as i32);
+
+    handle.join().unwrap();
 }
