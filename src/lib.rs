@@ -114,7 +114,7 @@ unsafe impl Sync for Overlapped {}
 
 impl Overlapped {
     fn new() -> io::Result<Overlapped> {
-        let event = try!(Event::new());
+        let event = Event::new()?;
         let mut ovl: Box<OVERLAPPED> = Box::new(unsafe { mem::zeroed() });
         ovl.hEvent = event.handle.value;
         Ok(Overlapped {
@@ -241,7 +241,7 @@ impl PipeOptions {
 
     /// Creates single instance of pipe with this options.
     pub fn single(&self) -> io::Result<ConnectingServer> {
-        let mut pipes = try!(self.multiple(1));
+        let mut pipes = self.multiple(1)?;
         match pipes.pop() {
             Some(pipe) => Ok(pipe),
             None => unreachable!(),
@@ -256,10 +256,10 @@ impl PipeOptions {
         let mut out = Vec::with_capacity(num as usize);
         let mut first = self.first;
         for _ in 0..num {
-            let handle = try!(self.create_named_pipe(first));
+            let handle = self.create_named_pipe(first)?;
             first = false;
-            let mut ovl = try!(Overlapped::new());
-            let pending = try!(connect_named_pipe(&handle, &mut ovl));
+            let mut ovl = Overlapped::new()?;
+            let pending = connect_named_pipe(&handle, &mut ovl)?;
             out.push(ConnectingServer {
                 handle: handle,
                 ovl: ovl,
@@ -282,7 +282,7 @@ pub struct ConnectingServer {
 impl ConnectingServer {
     /// Waites for client infinitely.
     pub fn wait(self) -> io::Result<PipeServer> {
-        match try!(self.wait_ms(INFINITE)) {
+        match self.wait_ms(INFINITE)? {
             Ok(pipe_server) => Ok(pipe_server),
             Err(_) => unreachable!(),
         }
@@ -291,10 +291,10 @@ impl ConnectingServer {
     /// Waites for client. Note that `timeout` 0xFFFFFFFF stands for infinite waiting.
     pub fn wait_ms(mut self, timeout: u32) -> io::Result<Result<PipeServer, ConnectingServer>> {
         if self.pending {
-            match try!(wait_for_single_obj(&mut self, timeout)) {
+            match wait_for_single_obj(&mut self, timeout)? {
                 Some(_) => {
                     let mut dummy = 0;
-                    try!(get_ovl_result(&mut self, &mut dummy));
+                    get_ovl_result(&mut self, &mut dummy)?;
                     self.pending = false;
                 }
                 None => return Ok(Err(self)),
@@ -334,7 +334,7 @@ impl PipeServer {
             result = unsafe { DisconnectNamedPipe(handle.value) };
             if result != 0 {
                 ovl.clear()?;
-                let pending = try!(connect_named_pipe(&handle, &mut ovl));
+                let pending = connect_named_pipe(&handle, &mut ovl)?;
                 Ok(ConnectingServer {
                     handle: handle,
                     ovl: ovl,
@@ -567,7 +567,7 @@ impl PipeClient {
                     if result != 0 {
                         return Ok(PipeClient {
                             handle: handle,
-                            ovl: try!(Overlapped::new()),
+                            ovl: Overlapped::new()?,
                             read_timeout: None,
                             write_timeout: None,
                         });
@@ -982,11 +982,11 @@ impl<'a, T: PipeIo> ReadHandle<'a, T> {
     fn wait_impl(&mut self) -> io::Result<()> {
         if self.pending {
             let timeout = self.get_read_timeout().unwrap_or(INFINITE);
-            match try!(wait_for_single_obj(self, timeout)) {
+            match wait_for_single_obj(self, timeout)? {
                 Some(_) => {
                     let mut count = 0;
                     self.pending = false;
-                    match try!(get_ovl_result(self, &mut count)) {
+                    match get_ovl_result(self, &mut count)? {
                         0 => Err(io::Error::last_os_error()),
                         _ => {
                             self.bytes_read = count;
@@ -1094,11 +1094,11 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
     fn wait_impl(&mut self) -> io::Result<()> {
         if self.pending {
             let timeout = self.get_write_timeout().unwrap_or(INFINITE);
-            match try!(wait_for_single_obj(self, timeout)) {
+            match wait_for_single_obj(self, timeout)? {
                 Some(_) => {
                     let mut bytes_written = 0;
                     self.pending = false;
-                    match try!(get_ovl_result(self, &mut bytes_written)) {
+                    match get_ovl_result(self, &mut bytes_written)? {
                         x if x as u32 == self.num_bytes => {
                             self.bytes_written = bytes_written;
                             Ok(())
@@ -1121,7 +1121,7 @@ impl<'a, T: PipeIo> WriteHandle<'a, T> {
     /// Returns (<bytes_read>, <owned_data>). Owned data is `Some((T, Vec<u8>))` if `WriteHandle`
     /// was created as a result of `T::write_async_owned`.
     pub fn wait(mut self) -> io::Result<(usize, Option<(T, Vec<u8>)>)> {
-        try!(self.wait_impl());
+        self.wait_impl()?;
         let io = self.io.take();
         let bytes_written = self.bytes_written;
         let buffer = self.buffer.take();
@@ -1148,7 +1148,7 @@ fn connect_named_pipe(handle: &Handle, ovl: &mut Overlapped) -> io::Result<bool>
         let mut pending = false;
         match err.raw_os_error().unwrap() as u32 {
             ERROR_IO_PENDING => pending = true,
-            ERROR_PIPE_CONNECTED => try!(ovl.event.set()),
+            ERROR_PIPE_CONNECTED => ovl.event.set()?,
             _ => return Err(err),
         }
         Ok(pending)
@@ -1396,7 +1396,7 @@ where
 pub fn wait<T: PipeIo>(list: &[T]) -> io::Result<usize> {
     assert!(list.len() > 0);
 
-    match try!(wait_for_multiple_obj(list, false, INFINITE)) {
+    match wait_for_multiple_obj(list, false, INFINITE)? {
         Some(x) => Ok(x),
         None => unreachable!(),
     }
