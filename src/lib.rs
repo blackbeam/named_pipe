@@ -962,7 +962,8 @@ impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for ReadHandle<'a, T> {
 
 impl<'a, T: PipeIo> Drop for ReadHandle<'a, T> {
     fn drop(&mut self) {
-        if self.pending {
+        let timeout = self.get_read_timeout().unwrap_or(INFINITE);
+        if self.pending && timeout > 0 {
             let result = unsafe {
                 let io_obj = self.io_obj();
                 CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl)
@@ -1074,7 +1075,8 @@ impl<'a, T: fmt::Debug + PipeIo> fmt::Debug for WriteHandle<'a, T> {
 
 impl<'a, T: PipeIo> Drop for WriteHandle<'a, T> {
     fn drop(&mut self) {
-        if self.pending {
+        let timeout = self.get_write_timeout().unwrap_or(INFINITE);
+        if self.pending && timeout > 0 {
             let result = unsafe {
                 let io_obj = self.io_obj();
                 CancelIoEx(io_obj.handle, &mut *io_obj.ovl.ovl)
