@@ -1681,3 +1681,54 @@ fn cancel_io_server_write_on_timeout() {
 
     handle.join().unwrap();
 }
+
+#[test]
+fn zero_timeout_read() {
+    use std::io::{BufRead, BufReader, ErrorKind, Write};
+    use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
+
+    let read_timeout = Arc::new(AtomicBool::new(false));
+
+    let handle = ::std::thread::spawn({
+        let read_timeout = read_timeout.clone();
+        move || {
+            let server = PipeOptions::new(r"\\.\pipe\ztimeout").single().unwrap();
+            let mut server = server.wait().unwrap();
+            server.set_write_timeout(Some(Duration::from_millis(0)));
+            loop {
+                match server.write(b"line\n") {
+                    Ok(_) => (),
+                    Err(ref err)
+                        if err.kind() == ErrorKind::TimedOut =>
+                    {
+                        if read_timeout.load(Ordering::Relaxed) {
+                            server.disconnect().unwrap();
+                            break;
+                        }
+                    }
+                    Err(err) => panic!("Write error: {:?}", err),
+                }
+            }
+        }
+    });
+
+    ::std::thread::sleep(Duration::from_secs(1));
+
+    let mut client = PipeClient::connect(r"\\.\pipe\ztimeout").unwrap();
+    client.set_read_timeout(Some(Duration::from_millis(0)));
+
+    let mut reader = BufReader::new(client);
+    let mut line = String::new();
+    loop {
+        match reader.read_line(&mut line) {
+            Ok(_) => line.clear(),
+            Err(ref err) if err.kind() == ErrorKind::TimedOut => {
+                read_timeout.store(true, Ordering::Relaxed);
+            },
+            Err(ref err) if err.raw_os_error() == Some(233) => break,
+            Err(err) => panic!("Read error: {:?}", err),
+        }
+    }
+
+    handle.join().unwrap();
+}
