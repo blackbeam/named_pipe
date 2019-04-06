@@ -25,7 +25,6 @@
 //!
 //! To connect to a pipe server use [`PipeClient`](struct.PipeClient.html) structure.
 
-
 use winapi::{
     ctypes::*,
     shared::{minwindef::*, ntdef::HANDLE, winerror::*},
@@ -391,8 +390,8 @@ impl PipeServer {
     /// Defaults to None (infinite).
     pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) {
         self.read_timeout = read_timeout.map(|dur| {
-            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
-            if overflowed || val > 0xFFFFFFFF {
+            let val = dur.as_millis();
+            if val > 0xFFFFFFFF {
                 0xFFFFFFFF
             } else {
                 val as u32
@@ -409,8 +408,8 @@ impl PipeServer {
     /// Defaults to None (infinite).
     pub fn set_write_timeout(&mut self, write_timeout: Option<Duration>) {
         self.write_timeout = write_timeout.map(|dur| {
-            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
-            if overflowed || val > 0xFFFFFFFF {
+            let val = dur.as_millis();
+            if val > 0xFFFFFFFF {
                 0xFFFFFFFF
             } else {
                 val as u32
@@ -637,8 +636,8 @@ impl PipeClient {
     /// Defaults to None (infinite).
     pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) {
         self.read_timeout = read_timeout.map(|dur| {
-            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
-            if overflowed || val > 0xFFFFFFFF {
+            let val = dur.as_millis();
+            if val > 0xFFFFFFFF {
                 0xFFFFFFFF
             } else {
                 val as u32
@@ -655,8 +654,8 @@ impl PipeClient {
     /// Defaults to None (infinite).
     pub fn set_write_timeout(&mut self, write_timeout: Option<Duration>) {
         self.write_timeout = write_timeout.map(|dur| {
-            let (val, overflowed) = dur.as_secs().overflowing_mul(1000);
-            if overflowed || val > 0xFFFFFFFF {
+            let val = dur.as_millis();
+            if val > 0xFFFFFFFF {
                 0xFFFFFFFF
             } else {
                 val as u32
