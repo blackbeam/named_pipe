@@ -1,0 +1,3 @@
+var N = null;var sourcesIndex = {};
+sourcesIndex["named_pipe"] = {"name":"","dirs":[],"files":["lib.rs"]};
+sourcesIndex["winapi"] = {"name":"","dirs":[{"name":"shared","dirs":[],"files":["basetsd.rs","cfg.rs","guiddef.rs","ktmtypes.rs","minwindef.rs","mod.rs","ntdef.rs","ntstatus.rs","windef.rs","winerror.rs"]},{"name":"um","dirs":[{"name":"gl","dirs":[],"files":["mod.rs"]}],"files":["cfgmgr32.rs","errhandlingapi.rs","fileapi.rs","handleapi.rs","ioapiset.rs","libloaderapi.rs","minwinbase.rs","mod.rs","namedpipeapi.rs","processthreadsapi.rs","synchapi.rs","winbase.rs","winnt.rs","winreg.rs"]},{"name":"vc","dirs":[],"files":["excpt.rs","mod.rs","vadefs.rs","vcruntime.rs"]},{"name":"winrt","dirs":[],"files":["mod.rs"]}],"files":["lib.rs","macros.rs"]};

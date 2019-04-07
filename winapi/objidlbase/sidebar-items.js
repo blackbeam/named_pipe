@@ -1,1 +1,0 @@
-initSidebarItems({"enum":[["APTTYPE",""],["APTTYPEQUALIFIER",""]],"struct":[["IMalloc",""],["IMallocVtbl",""],["ISequentialStream",""],["ISequentialStreamVtbl",""],["IStream",""],["IStreamVtbl",""],["STATSTG",""]],"type":[["IEnumString",""],["LPMALLOC",""],["LPSTREAM",""]]});
